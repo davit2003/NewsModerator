@@ -3,6 +3,8 @@ import json
 import re
 import time
 import uuid
+import os
+from . import commons
 
 
 MENU = {
@@ -13,6 +15,36 @@ MENU = {
 
 
 class Moderation:
+    def web_photo(self, id):
+        if os.getenv('AUTO_PHOTOS','true').lower() != 'true':
+            return False
+        row = self.store.get(id)
+        query = self.store.setting(f'image_query:{id}')
+        if not query:
+            return False
+        seen = json.loads(self.store.setting(f'commons_seen:{id}','[]'))
+        try:
+            photos = commons.search(query,1024-commons.units(row['text'])-2,seen)
+        except Exception:
+            self.tell('Поиск фото временно недоступен. Текст сохранён; попробуйте «Найти другое фото» позже.')
+            return False
+        for photo in photos[:3]:
+            try:
+                # Freeze the actual image as a Telegram file_id before approval; publication never
+                # fetches a mutable external URL. This private preview does not publish to the group.
+                preview = self.api('sendPhoto',chat_id=self.owner,photo=photo['image_url'],
+                                 caption=row['text']+'\n\n'+photo['credit'])
+                file_id = preview['photo'][-1]['file_id']
+            except Exception:
+                continue
+            self.store.edit(id,photo=file_id,credit=photo['credit'])
+            seen.append(photo['page_id'])
+            self.store.set(f'commons_seen:{id}',json.dumps(seen))
+            self.store.set(f'photo_evidence:{id}:{self.store.get(id)["version"]}',
+                           json.dumps({**photo,'retrieved_at':time.time()},ensure_ascii=False))
+            return True
+        return False
+
     def menu(self, text='Найдём интересную историю? Выберите действие ниже.'):
         self.api('sendMessage',chat_id=self.owner,text=text,reply_markup=MENU)
 
@@ -95,7 +127,7 @@ class Moderation:
                 self.menu('Действие отменено.')
             return True
         action,_,rest = data.partition(':')
-        if action not in ('preview','edit','rewrite','photo','another','upload'):
+        if action not in ('preview','edit','rewrite','photo','another','upload','webphoto'):
             return False
         id,version = map(int,rest.split(':'))
         row = self.valid_draft(id,version)
@@ -109,8 +141,16 @@ class Moderation:
         elif action == 'photo':
             self.clear_dialog()
             self.api('sendMessage',chat_id=self.owner,text='Как заменить фото?',reply_markup={
-                'inline_keyboard':[[{'text':'🔄 Другое из коллекции','callback_data':f'another:{id}:{version}'}],
+                'inline_keyboard':[[{'text':'🌐 Найти другое фото','callback_data':f'webphoto:{id}:{version}'}],
+                                   [{'text':'🔄 Другое из коллекции','callback_data':f'another:{id}:{version}'}],
                                    [{'text':'📷 Загрузить фото','callback_data':f'upload:{id}:{version}'}]]})
+        elif action == 'webphoto':
+            self.clear_dialog()
+            self.tell('Ищу фото с подходящей лицензией…')
+            if self.web_photo(id):
+                self.preview(id,photo_sent=True)
+            else:
+                self.tell('Подходящего нового фото с проверяемой лицензией не найдено. Текущий пост не изменён.')
         elif action == 'another':
             self.clear_dialog()
             if self.choose_photo(id,exclude_current=True):

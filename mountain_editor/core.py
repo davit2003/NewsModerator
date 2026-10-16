@@ -64,6 +64,9 @@ class Store:
             row = self.get(id)
             if row['state'] not in ('draft', 'approved'):
                 raise ValueError('Этот черновик уже закрыт')
+            merged = {**row, **changes}
+            if merged.get('credit') and len((merged['text']+'\n\n'+merged['credit']).encode('utf-16-le'))//2>1024:
+                raise ValueError('Текст и подпись к фото слишком длинные. Сократите текст; данные об авторе сохраняются.')
             fields = ','.join(f'{key}=?' for key in changes)
             self.db.execute(f'''UPDATE drafts SET {fields},version=version+1,state='draft',
                 due=NULL,approved_by=NULL,approved_version=NULL WHERE id=?''', (*changes.values(), id))

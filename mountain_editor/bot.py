@@ -40,15 +40,17 @@ class Bot(Moderation):
     def tell(self, text):
         return self.api('sendMessage',chat_id=self.owner,text=text[:4000])
 
-    def preview(self, id):
+    def preview(self, id, photo_sent=False):
         row = self.store.get(id)
         if not row['photo'] and row['state'] == 'draft' and row['expires'] > time.time():
-            self.choose_photo(id)
+            photo_sent = self.web_photo(id)
+            if not photo_sent:
+                self.choose_photo(id)
             row = self.store.get(id)
         caption = row['text']+ ('\n\n'+row['credit'] if row['credit'] else '')
-        if row['photo']:
+        if row['photo'] and not photo_sent:
             self.api('sendPhoto',chat_id=self.owner,photo=row['photo'],caption=caption)
-        else:
+        elif not row['photo']:
             self.tell(caption)
         version = row['version']
         buttons = {'inline_keyboard':[
@@ -107,7 +109,7 @@ class Bot(Moderation):
         command,_,args = text.partition(' ')
         command = command.split('@')[0]
         if command in ('/start','/help'):
-            self.menu('Я подготовлю пост, а вы выберете: опубликовать, изменить или пропустить.\nДля начала добавьте свои фото кнопкой «🖼 Мои фотографии».')
+            self.menu('Я найду историю и предложу фото с Wikimedia Commons. Вы решаете: опубликовать, изменить или пропустить.\nСвои фотографии можно добавить по желанию.')
             if command == '/help':
                 self.tell(HELP)
         elif command == '/find':

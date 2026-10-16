@@ -71,10 +71,49 @@ Run `python -m mountain_editor check` for configuration presence checks (no API 
 API billing is separate from chat subscriptions. The request count ceiling is NOT a currency
 budget: search tool usage and output length still affect charges. Configure provider alerts too.
 
+## Automatic photos — no uploads or extra API key required
+
+Newly generated drafts now search Wikimedia Commons automatically using a location/subject query
+produced during the existing drafting call. Demo posts use a generic mountain landscape query.
+The bot sends a complete private preview with the selected image and full credit. Choose
+**Изменить фото → Найти другое фото** to search for another candidate. Uploaded photos are optional.
+Existing news drafts created before this update have no image query: generate a fresh draft to use this feature.
+
+The default `AUTO_PHOTOS=true` requires no extra credentials or AI calls. Set it to `false` to disable
+Commons access. `COMMONS_USER_AGENT` may optionally identify your own deployment/contact URL.
+
+The filter accepts exact CC BY / CC BY-SA 2.0, 2.5, 3.0, 4.0 and CC0 metadata with matching license URLs,
+known authors, no listed restrictions or custom attribution requirements, and JPEG/PNG images on
+Wikimedia's image host. Complex credits, unsupported licenses, unknown authors and insufficient caption space
+are skipped. The post includes author, license link, source page and an illustrative/resized label. Older licenses
+also include the supplied title; a simple original-source URL is retained when provided.
+No cropping, overlays or generated edits are applied. Reuse of CC BY-SA photos retains that license.
+Do not remove the photo credit when copying a post outside the bot.
+
+License metadata and retrieval time are saved with the draft version for audit. The image is first
+uploaded to the private Telegram preview and stored as a Telegram file ID, so approval publishes that
+same image rather than refetching a changing URL. Wikimedia metadata can be wrong and does not clear
+personality/trademark rights; this is conservative automated filtering, not legal clearance. Review
+relevance and visible people/logos during normal approval. Pictures are illustrations, not claimed to
+show the specific news event. Matching is based on search relevance, not visual AI verification.
+
+If Commons is unavailable or no qualifying photo is found, the draft is retained. An optional uploaded
+photo collection can supply an illustrative fallback; otherwise nothing publishes until a photo is
+selected. The bot never substitutes an unlicensed image. Long text may need shortening to fit attribution.
+Photo discovery needs outbound HTTPS access to commons.wikimedia.org; Telegram retrieves the image
+from upload.wikimedia.org or thumb.wikimedia.org. Live Commons discovery returned qualifying Tatra
+photos, and 37 offline tests cover filters and workflow; Telegram delivery from Railway must
+be checked on Railway.
+
+References: https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia
+and https://creativecommons.org/licenses/by/4.0/ .
+
 ## Daily use — buttons first
 
 After Railway deploys this update, send `/start` once to show the new menu.
 No new environment variables or manual database migration are needed. Existing drafts remain intact.
+
+Optional photo collection setup:
 
 1. Tap **🖼 Мои фотографии** and confirm you can reuse the photos you are about to upload.
 2. Send your photos normally, individually or as an album, then tap **Готово**.
@@ -134,7 +173,7 @@ This is a runnable MVP, not a deployed service. No credentials are bundled. Offl
 have been run; live model access, model output quality, Telegram permissions, Docker build and Railway
 deployment still require validation in your accounts.
 
-Not yet included: direct RSS ingestion, automatic photo licensing/discovery, visual AI photo tagging,
+Not yet included: direct RSS ingestion, visual AI photo tagging,
 Instagram account ingestion, engagement analytics, semantic duplicate clustering, independent source
 fact-checking, automatic learning from edits, or automated backups. Grounded search and a second writing
 pass help quality but are not an independent fact-check. Owner review remains necessary.
@@ -146,7 +185,7 @@ This MVP retains source links but does not render Google's HTML search suggestio
 Recommended next milestone: connect one provider, collect ten representative story dossiers, compare
 Russian drafts from the candidate models with a fixed rubric (accuracy, relevance, hook, naturalness,
 editing effort, cost), and choose from observed results. The model ID is deliberately not hardcoded.
-Then add visual photo tagging and RSS sources based on the pilot's actual gaps.
+Then consider visual photo tagging and RSS sources based on the pilot's actual gaps.
 
 ## Documentation used
 
