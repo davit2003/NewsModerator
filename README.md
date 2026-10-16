@@ -9,7 +9,8 @@ Tatras first, flexible geography, human approval required. Python 3.12, standard
 - Two-stage evidence gathering and Russian drafting with an editorial brief.
 - Source URL must occur in provider search metadata; exact-URL duplicate suppression.
 - Recent content and owner-supplied context passed into editorial generation.
-- Owner-only private Telegram controls, photos, edits, AI rewrites, rejection and scheduling.
+- Owner-only private Telegram controls, button-driven edits and AI rewrites, rejection and scheduling.
+- Reusable photo collection: normal Telegram uploads, session consent, automatic illustrative photo selection.
 - Version-specific approval; edits revoke approval; expired drafts cannot publish.
 - Single-instance SQLite persistence and a daily AI request count ceiling.
 - Automatic discovery on Monday, Wednesday and Friday at/after 10:00 Europe/Warsaw (optional).
@@ -70,22 +71,43 @@ Run `python -m mountain_editor check` for configuration presence checks (no API 
 API billing is separate from chat subscriptions. The request count ceiling is NOT a currency
 budget: search tool usage and output length still affect charges. Configure provider alerts too.
 
-## Daily use
+## Daily use — buttons first
 
-- `/find`: research one candidate and send its preview.
-- `/queue`: list drafts and states. `/preview 1`: display the current version.
-- Send a photo with caption `/photo 1 Фото: Davit. Иллюстрация. RIGHTS_OK`.
-  The marker attests that you have reuse rights. It is removed from the public caption.
-  Check that the image matches the subject; the app does not inspect its visual contents.
-- `/edit 1 FULL NEW TEXT INCLUDING SOURCE LINK`: replace the text and revoke approval.
-- `/rewrite 1 Сделай начало конкретнее, убери пафос`: AI rewrite, then fresh preview.
-- Click **Опубликовать** to approve that exact version and send it.
-- `/schedule 1 2 2026-12-01T18:00:00+01:00`: approve draft 1, version 2, for that time.
-  A timezone offset is required. Time must be before expiry.
-- `/context ...`: replace the stored style preferences, recent Instagram context and confirmed trips.
-  Use this to supply representative captions; no automatic training or feedback learning is claimed.
-- `/pause`: stop automatic research AND publishing; `/resume`: resume.
-  Manual `/find` remains available while paused.
+After Railway deploys this update, send `/start` once to show the new menu.
+No new environment variables or manual database migration are needed. Existing drafts remain intact.
+
+1. Tap **🖼 Мои фотографии** and confirm you can reuse the photos you are about to upload.
+2. Send your photos normally, individually or as an album, then tap **Готово**.
+   Consent applies to that upload session for one hour; approved photos remain reusable afterward.
+   Optional captions describe location, season, or subject to improve matching. No IDs or magic text.
+3. Tap **🔎 Найти материал**. The bot prepares a draft and selects a photo from your collection.
+4. Under the preview, choose **✅ Опубликовать**, **✏️ Изменить текст**, **🖼 Изменить фото**,
+   **🔄 Переписать**, or **❌ Пропустить**. Text changes and rewrite instructions are normal replies.
+5. **Изменить фото** offers another library image or a normal upload. For a draft-specific album,
+   the first image is attached; remaining images are saved for later. Tap **Готово** for the preview.
+6. **📋 Черновики** opens active drafts. **↩️ Отмена** cancels the current interaction.
+
+Only send photos you own or may reuse with the generic attribution
+“Фото из коллекции организатора. Иллюстрация.” Photos requiring special attribution should use the
+legacy `/photo ID CREDIT RIGHTS_OK` command with the full required credit instead of the collection.
+Collection selection uses caption word matching and least-recently-selected ordering, not visual AI
+recognition. If no captions match it selects an illustrative image by rotation: verify relevance before
+approval. All collection photos are explicitly labeled illustrative, not evidence of the news event.
+File IDs, descriptions, consent records and selection timestamps are stored in the persistent database;
+image bytes stay on Telegram. File IDs are tied to this bot and cannot be migrated to a different bot.
+
+Advanced commands remain available:
+
+- `/find`, `/queue`, `/preview ID`, `/photos`, `/cancel`.
+- `/edit ID FULL TEXT`: replace text; the button-based edit flow automatically preserves source links.
+- `/rewrite ID feedback`: rewrite using AI.
+- `/schedule ID VERSION 2026-12-01T18:00:00+01:00`: approve an exact version for a future time.
+- `/context ...`: replace style examples, Instagram context and confirmed trip information.
+- `/pause` and `/resume`: stop/resume scheduled research and publishing; manual discovery still works.
+
+Any photo or text change revokes approval. Stale controls cannot mutate a newer draft. Upload/edit
+conversations survive restarts but expire after one hour. Publishing remains disabled unless explicitly
+configured. No Telegram or AI credentials are changed by this update.
 
 Drafts expire after 24 hours, or six hours when marked safety-sensitive by the model.
 This is an upper limit after discovery, not evidence that a source is fresh. Verify event dates
@@ -98,7 +120,7 @@ Only owner private-chat commands work. Buttons encode draft ID and version; the 
 both. Publication claims are atomic. A Telegram timeout, or restart during a send, results in
 `uncertain` state. Check the group manually; this version intentionally has no blind retry command.
 Commands are recorded before processing, so a crash can lose a command, but cannot replay a publish.
-Use `/queue` after a restart. Provider requests are synchronous; research can delay button processing
+Use **📋 Черновики** after a restart; database states include `uncertain` for manual recovery. Provider requests are synchronous; research can delay button processing
 and scheduled posts by several minutes. Scheduled delivery is best effort, not exact-time guaranteed.
 Scheduled research attempts are recorded before execution; failures do not loop or accumulate AI charges.
 
@@ -112,7 +134,7 @@ This is a runnable MVP, not a deployed service. No credentials are bundled. Offl
 have been run; live model access, model output quality, Telegram permissions, Docker build and Railway
 deployment still require validation in your accounts.
 
-Not yet included: direct RSS ingestion, automatic photo licensing/discovery, photo library selection,
+Not yet included: direct RSS ingestion, automatic photo licensing/discovery, visual AI photo tagging,
 Instagram account ingestion, engagement analytics, semantic duplicate clustering, independent source
 fact-checking, automatic learning from edits, or automated backups. Grounded search and a second writing
 pass help quality but are not an independent fact-check. Owner review remains necessary.
@@ -124,7 +146,7 @@ This MVP retains source links but does not render Google's HTML search suggestio
 Recommended next milestone: connect one provider, collect ten representative story dossiers, compare
 Russian drafts from the candidate models with a fixed rubric (accuracy, relevance, hook, naturalness,
 editing effort, cost), and choose from observed results. The model ID is deliberately not hardcoded.
-Then add photo-library selection and RSS sources based on the pilot's actual gaps.
+Then add visual photo tagging and RSS sources based on the pilot's actual gaps.
 
 ## Documentation used
 
@@ -135,3 +157,4 @@ Then add photo-library selection and RSS sources based on the pilot's actual gap
 - https://docs.railway.com/volumes
 
 Checked 2026-10-16. Provider capabilities and billing can change.
+

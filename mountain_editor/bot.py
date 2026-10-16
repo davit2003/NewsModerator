@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from .providers import post
+from .moderation import Moderation
 
 HELP = '''Команды:
 /find — найти один материал
@@ -14,14 +15,13 @@ HELP = '''Команды:
 /schedule ID VERSION 2026-12-01T18:00:00+01:00 — утвердить указанную версию на время
 /context текст — заменить редакционные предпочтения и контекст Instagram/поездок
 /pause и /resume — остановить/возобновить поиск и публикацию
-Чтобы прикрепить фото: отправьте фото с подписью
-/photo ID Фото: автор. Иллюстрация. RIGHTS_OK
-RIGHTS_OK подтверждает ваше право использовать фото. Подпись после ID войдёт в пост (кроме RIGHTS_OK).
+Для обычной работы используйте кнопки меню и кнопки под постом.
+/photos — добавить фото в коллекцию; /cancel — отменить действие.
 Публикация требует актуального одобрения. Время поиска: Europe/Warsaw.
 '''
 
 
-class Bot:
+class Bot(Moderation):
     def __init__(self, store, editor):
         self.store, self.editor = store, editor
         self.token = os.environ['TELEGRAM_BOT_TOKEN']
@@ -42,21 +42,30 @@ class Bot:
 
     def preview(self, id):
         row = self.store.get(id)
+        if not row['photo'] and row['state'] == 'draft' and row['expires'] > time.time():
+            self.choose_photo(id)
+            row = self.store.get(id)
         caption = row['text']+ ('\n\n'+row['credit'] if row['credit'] else '')
         if row['photo']:
             self.api('sendPhoto',chat_id=self.owner,photo=row['photo'],caption=caption)
         else:
             self.tell(caption)
-        buttons = {'inline_keyboard':[[
-            {'text':'✅ Опубликовать','callback_data':f"publish:{id}:{row['version']}"},
-            {'text':'❌ Отклонить','callback_data':f"reject:{id}:{row['version']}"}]]}
+        version = row['version']
+        buttons = {'inline_keyboard':[
+            [{'text':'✅ Опубликовать','callback_data':f'publish:{id}:{version}'},
+             {'text':'❌ Пропустить','callback_data':f'reject:{id}:{version}'}],
+            [{'text':'✏️ Изменить текст','callback_data':f'edit:{id}:{version}'},
+             {'text':'🖼 Изменить фото','callback_data':f'photo:{id}:{version}'}],
+            [{'text':'🔄 Переписать','callback_data':f'rewrite:{id}:{version}'}]]}
         self.api('sendMessage',chat_id=self.owner,
                  text=f"Черновик {id} · версия {row['version']} · {row['state']}\n{row['reason'][:1200]}\n"
-                      +('Нужно фото.\n' if not row['photo'] else '')+'Изменить: /edit или /rewrite. Запланировать: /schedule.\n'
+                      +('Добавьте фото кнопкой ниже.\n' if not row['photo'] else '')+'Выберите действие ниже.\n'
                       +('ПУБЛИКАЦИЯ ОТКЛЮЧЕНА' if not self.live else ''),reply_markup=buttons)
 
     def find(self):
         id = self.editor.discover()
+        if not id and self.editor.provider.name == 'demo':
+            id = next((r['id'] for r in self.store.recent() if r['story_key'] == 'demo' and r['state'] == 'draft' and r['expires'] > time.time()), None)
         if id:
             self.preview(id)
         else:
@@ -70,29 +79,41 @@ class Bot:
             if callback['from']['id'] != self.owner or callback.get('message',{}).get('chat',{}).get('id') != self.owner:
                 return
             self.api('answerCallbackQuery',callback_query_id=callback['id'])
+            if self.moderation_callback(callback.get('data','')):
+                return
             action,id,version = callback['data'].split(':')
             id,version = int(id),int(version)
             if action == 'publish':
+                self.valid_draft(id,version)
                 if not self.live:
                     self.tell('Публикация отключена. Для запуска установите PUBLISH_ENABLED=true.')
                     return
                 self.store.approve(id,version,self.owner,self.owner)
+                self.clear_dialog()
                 self.publish_due()
+                state = self.store.get(id)['state']
+                self.tell('Опубликовано ✅' if state == 'published' else 'Статус: '+state)
             elif action == 'reject':
+                self.valid_draft(id,version)
+                self.clear_dialog()
                 self.store.reject(id,version)
                 self.tell('Отклонено (если версия ещё актуальна).')
             return
         if message.get('from',{}).get('id') != self.owner or message.get('chat',{}).get('id') != self.owner:
             return
         text = message.get('text',message.get('caption','')).strip()
+        if self.moderation_message(message,text):
+            return
         command,_,args = text.partition(' ')
         command = command.split('@')[0]
         if command in ('/start','/help'):
-            self.tell(HELP)
+            self.menu('Я подготовлю пост, а вы выберете: опубликовать, изменить или пропустить.\nДля начала добавьте свои фото кнопкой «🖼 Мои фотографии».')
+            if command == '/help':
+                self.tell(HELP)
         elif command == '/find':
             self.find()
         elif command == '/queue':
-            self.tell('\n'.join(f"{r['id']} v{r['version']} {r['state']} — {r['text'][:70]}" for r in self.store.recent()) or 'Очередь пуста')
+            self.queue()
         elif command == '/preview':
             self.preview(int(args))
         elif command in ('/edit','/rewrite','/photo'):
@@ -158,7 +179,7 @@ class Bot:
             self.find()
 
     def run(self):
-        self.tell('Редактор запущен. /help — команды. '+('Публикация включена.' if self.live else 'Публикация отключена.'))
+        self.menu('Редактор запущен. '+('Публикация включена.' if self.live else 'Публикация отключена.'))
         while True:
             try:
                 updates = self.api('getUpdates',offset=int(self.store.setting('offset','0')),timeout=20,
@@ -178,3 +199,4 @@ class Bot:
                 # Error class only: exception strings can contain API keys.
                 print('Worker error:',type(error).__name__,flush=True)
                 time.sleep(5)
+

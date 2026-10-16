@@ -19,6 +19,10 @@ class Store:
           message_id INTEGER, created REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, calls INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS photos (
+          id INTEGER PRIMARY KEY, unique_id TEXT UNIQUE NOT NULL, file_id TEXT NOT NULL,
+          description TEXT NOT NULL, credit TEXT NOT NULL, confirmed_by INTEGER NOT NULL,
+          confirmed_at REAL NOT NULL, last_used REAL NOT NULL DEFAULT 0);
         ''')
         # A crash after sending but before recording success is ambiguous. Never resend automatically.
         self.db.execute("UPDATE drafts SET state='uncertain' WHERE state='publishing'")
@@ -108,3 +112,23 @@ class Store:
             cur = self.db.execute('UPDATE usage SET calls=calls+1 WHERE day=? AND calls<?', (day,limit))
             if not cur.rowcount:
                 raise ValueError('Достигнут дневной лимит AI-запросов')
+
+    def add_photo(self, unique_id, file_id, description, credit, owner):
+        if not credit or len(credit.encode('utf-16-le'))//2 > 150:
+            raise ValueError('Подпись к фото должна быть короче 150 символов')
+        with self.db:
+            self.db.execute('''INSERT INTO photos
+                (unique_id,file_id,description,credit,confirmed_by,confirmed_at)
+                VALUES (?,?,?,?,?,?) ON CONFLICT(unique_id) DO UPDATE SET
+                file_id=excluded.file_id,description=excluded.description,credit=excluded.credit,
+                confirmed_by=excluded.confirmed_by,confirmed_at=excluded.confirmed_at''',
+                (unique_id,file_id,description[:1000],credit,owner,time.time()))
+
+    def photos(self):
+        return [dict(r) for r in self.db.execute('SELECT * FROM photos ORDER BY last_used,id')]
+
+    def use_photo(self, draft_id, photo):
+        self.edit(draft_id,photo=photo['file_id'],credit=photo['credit'])
+        with self.db:
+            self.db.execute('UPDATE photos SET last_used=? WHERE id=?', (time.time(),photo['id']))
+
