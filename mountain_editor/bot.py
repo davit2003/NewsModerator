@@ -183,18 +183,18 @@ class Bot(Moderation):
     def run(self):
         provider = self.editor.provider
         print(f'Bot started: provider={provider.name}; publishing={self.live}; auto_research='+str(os.getenv('AUTO_RESEARCH','false').lower()=='true'),flush=True)
-        if os.getenv('AI_DIAGNOSTIC_ON_START','false').lower() == 'true' and not self.store.setting('ai_diagnostic_v1'):
-            self.store.set('ai_diagnostic_v1','started')
+        if os.getenv('AI_DIAGNOSTIC_ON_START','false').lower() == 'true' and not self.store.setting('ai_diagnostic_v2'):
+            self.store.set('ai_diagnostic_v2','started')
             try:
-                provider.call('Reply with OK.',max_tokens=128)
-                self.store.set('ai_diagnostic_v1','AI connection succeeded')
+                provider.call('Find the official Tatra National Park Poland website. Return its URL.',search=True,max_tokens=128)
+                self.store.set('ai_diagnostic_v2','AI connection succeeded')
                 print('AI diagnostic: connection succeeded',flush=True)
             except ValueError as error:
                 # APIError messages are constructed locally; no raw provider error bodies.
-                self.store.set('ai_diagnostic_v1',str(error))
+                self.store.set('ai_diagnostic_v2',str(error))
                 print('AI diagnostic: '+str(error),flush=True)
             except Exception as error:
-                self.store.set('ai_diagnostic_v1',type(error).__name__)
+                self.store.set('ai_diagnostic_v2',type(error).__name__)
                 print('AI diagnostic: '+type(error).__name__,flush=True)
         self.menu('Редактор запущен. '+('Публикация включена.' if self.live else 'Публикация отключена.'))
         while True:

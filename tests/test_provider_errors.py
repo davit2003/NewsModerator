@@ -12,7 +12,7 @@ class ProviderErrorTests(unittest.TestCase):
         error = urllib.error.HTTPError('https://api.openai.com/v1/responses',429,'error',{},io.BytesIO(body))
         with patch('urllib.request.urlopen',side_effect=error):
             with self.assertRaises(APIError) as caught:
-                post('https://api.openai.com/v1/responses',{})
+                post('https://api.openai.com/v1/responses',{}, {'Authorization':'Bearer private-key-secret'})
         self.assertIn('insufficient_quota',str(caught.exception))
         self.assertNotIn('private-key-secret',str(caught.exception))
 
@@ -34,6 +34,16 @@ class ProviderErrorTests(unittest.TestCase):
     def test_invalid_json_actionable(self):
         with self.assertRaisesRegex(ValueError,'формат'):
             parse_json('invalid output')
+
+    def test_string_error_and_rate_headers_preserved(self):
+        body = json.dumps({'error':'Web search unavailable for this tier; try again later.'}).encode()
+        error = urllib.error.HTTPError('https://api.openai.com/v1/responses',429,'error',
+                                      {'retry-after':'60'},io.BytesIO(body))
+        with patch('urllib.request.urlopen',side_effect=error):
+            with self.assertRaises(APIError) as caught:
+                post('https://api.openai.com/v1/responses',{})
+        self.assertIn('Web search unavailable',str(caught.exception))
+        self.assertIn('retry-after=60',str(caught.exception))
 
 
 if __name__ == '__main__':

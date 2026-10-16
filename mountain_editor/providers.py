@@ -7,15 +7,32 @@ from urllib.parse import urlsplit
 from datetime import datetime, timezone
 
 
+def redact_error(text, headers=None):
+    text = str(text)
+    # Strip exact credential values before applying general patterns and truncating.
+    secrets = [value for name,value in os.environ.items()
+               if any(part in name.upper() for part in ('KEY','TOKEN','SECRET','PASSWORD')) and len(value)>5]
+    for name,value in (headers or {}).items():
+        if name.lower() in ('authorization','x-goog-api-key'):
+            secrets.extend([value,value.removeprefix('Bearer ')])
+    for value in sorted(secrets,key=len,reverse=True):
+        text = text.replace(value,'[redacted]')
+    text = re.sub(r'https?://\S+', '[URL]', text)
+    text = re.sub(r'\b(?:sk-|AIza|org-|proj_)[\w*-]+','[redacted]',text)
+    text = re.sub(r'\b\d{6,}:[\w-]+','[redacted]',text)
+    text = re.sub(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}','[email]',text)
+    return ' '.join(text.split())[:900]
+
+
 class APIError(ValueError):
     """Safe structured error: never retain URLs, API keys or raw provider messages."""
-    def __init__(self, service, status, code='unknown'):
+    def __init__(self, service, status, code='unknown', detail='', limits=''):
         self.service, self.status = service, status
         allowed = {'insufficient_quota','invalid_api_key','model_not_found','rate_limit_exceeded',
                    'billing_hard_limit_reached','permission_denied','invalid_request_error',
                    'unsupported_parameter','unsupported_value','context_length_exceeded',
                    'RESOURCE_EXHAUSTED','UNAUTHENTICATED','PERMISSION_DENIED','INVALID_ARGUMENT'}
-        self.code = code if code in allowed else 'unknown'
+        self.code = code if isinstance(code,str) and code in allowed else 'unknown'
         if self.code in ('insufficient_quota','billing_hard_limit_reached'):
             hint = 'Недостаточно API-кредитов или достигнут лимит оплаты. Проверьте Billing в OpenAI API; подписка ChatGPT не оплачивает API.'
         elif status == 401:
@@ -30,7 +47,8 @@ class APIError(ValueError):
             hint = 'API отклонил параметры запроса. Требуется проверить совместимость модели и web search.'
         else:
             hint = 'Внешний сервис временно недоступен. Повторите позже.'
-        super().__init__(f'{service}: HTTP {status}, {self.code}. {hint}')
+        suffix = ('\nОтвет API: '+detail if detail else '') + ('\nЛимиты: '+limits if limits else '')
+        super().__init__(f'{service}: HTTP {status}, {self.code}. {hint}'+suffix)
 
 
 def post(url, payload, headers=None, timeout=100):
@@ -45,14 +63,27 @@ def post(url, payload, headers=None, timeout=100):
         service = {'api.openai.com':'OpenAI','api.telegram.org':'Telegram',
                    'generativelanguage.googleapis.com':'Gemini'}.get(host,'API')
         code = 'unknown'
+        detail = ''
         try:
             body = json.loads(error.read(65536))
             details = body.get('error',{})
             if isinstance(details,dict):
                 code = details.get('code') or details.get('status') or details.get('type') or 'unknown'
+                detail = details.get('message','')
+            elif isinstance(details,str):
+                detail = details
+            if not detail:
+                detail = body.get('message','')
         except (ValueError,AttributeError):
             pass
-        raise APIError(service,error.code,code) from None
+        limits = []
+        for key in ('retry-after','x-ratelimit-limit-requests','x-ratelimit-remaining-requests',
+                    'x-ratelimit-limit-tokens','x-ratelimit-remaining-tokens',
+                    'x-ratelimit-reset-requests','x-ratelimit-reset-tokens'):
+            value = (error.headers or {}).get(key,'')
+            if value and re.fullmatch(r'[0-9.hms -]{1,40}',value):
+                limits.append(key+'='+value)
+        raise APIError(service,error.code,code,redact_error(detail,headers),'; '.join(limits)) from None
     except (urllib.error.URLError,TimeoutError):
         raise ValueError('Сетевая ошибка или тайм-аут внешнего API. Попробуйте позже.') from None
 
