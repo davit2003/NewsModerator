@@ -1,0 +1,1 @@
+"""Mountain community editorial bot."""
