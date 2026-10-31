@@ -64,6 +64,9 @@ class SameHostRedirect(urllib.request.HTTPRedirectHandler):
 def fetch(url):
     req = urllib.request.Request(url,headers={'User-Agent':AGENT,'Accept':'text/html,application/rss+xml,application/atom+xml,application/xml'})
     with urllib.request.build_opener(SameHostRedirect).open(req,timeout=12) as r:
+        media = r.headers.get_content_type()
+        if not (media.startswith('text/') or 'xml' in media):
+            raise ValueError('Non-text source skipped')
         body = r.read(MAX_BYTES+1)
         if len(body) > MAX_BYTES: raise ValueError('Source too large')
         return body.decode(r.headers.get_content_charset() or 'utf-8',errors='replace')
@@ -118,6 +121,7 @@ def collect_source(source):
         for href in parser.links:
             link=urljoin(url,href)
             if urlsplit(link).hostname != urlsplit(url).hostname: continue
+            if re.search(r'\.(?:webp|jpg|jpeg|png|gif|pdf|zip|mp4)(?:[?#]|$)',link,re.I): continue
             if not re.search(source.get('link_pattern',r'/(?:20\d{2}/|[^/]+-\d+/?)'),link): continue
             try: link=canonical(link)
             except ValueError: continue

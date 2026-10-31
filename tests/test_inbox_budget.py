@@ -60,6 +60,15 @@ class InboxTests(unittest.TestCase):
             rows,status=collect_source({'url':'https://example.org/feed','name':'Example','kind':'feed','region':'tatras'})
         self.assertEqual(status,'ok'); self.assertEqual(len(rows),1)
 
+    def test_index_skips_images_and_fetches_article(self):
+        html='<main><a href="/story-123/">Story</a><a href="/image-2026.webp">Image</a></main>'
+        article='<article>'+('Interesting mountain facts. '*20)+'</article>'
+        with patch('mountain_editor.collector.allowed',return_value=True),patch('mountain_editor.collector.fetch',side_effect=[html,article]) as fetch:
+            rows,status=collect_source({'url':'https://example.org/','name':'Example','kind':'index','region':'tatras'})
+        self.assertEqual(fetch.call_count,2)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]['url'],'https://example.org/story-123')
+
     def test_explicit_text_only_revokes_approval_and_publishes_message(self):
         id=self.s.add('x','Story',[],'')
         self.s.edit(id,photo='file',credit='Author')
