@@ -7,7 +7,10 @@ from .providers import post
 from .moderation import Moderation
 
 HELP = '''Команды:
-/find — найти один материал
+/find — обновить подборку историй
+/inbox — открыть сохранённую подборку
+/budget — расход AI и месячный лимит
+/health — состояние источников
 /queue — последние черновики
 /preview ID — актуальный предпросмотр
 /edit ID новый текст — заменить текст целиком, включая источник
@@ -42,7 +45,7 @@ class Bot(Moderation):
 
     def preview(self, id, photo_sent=False):
         row = self.store.get(id)
-        if not row['photo'] and row['state'] == 'draft' and row['expires'] > time.time():
+        if not row['photo'] and not row.get('text_only') and row['state'] == 'draft' and row['expires'] > time.time():
             photo_sent = self.web_photo(id)
             if not photo_sent:
                 self.choose_photo(id)
@@ -58,20 +61,39 @@ class Bot(Moderation):
              {'text':'❌ Пропустить','callback_data':f'reject:{id}:{version}'}],
             [{'text':'✏️ Изменить текст','callback_data':f'edit:{id}:{version}'},
              {'text':'🖼 Изменить фото','callback_data':f'photo:{id}:{version}'}],
-            [{'text':'🔄 Переписать','callback_data':f'rewrite:{id}:{version}'}]]}
+            [{'text':'🔄 Переписать','callback_data':f'rewrite:{id}:{version}'},
+             {'text':'Без фото','callback_data':f'textonly:{id}:{version}'}]]}
         self.api('sendMessage',chat_id=self.owner,
                  text=f"Черновик {id} · версия {row['version']} · {row['state']}\n{row['reason'][:1200]}\n"
-                      +('Добавьте фото кнопкой ниже.\n' if not row['photo'] else '')+'Выберите действие ниже.\n'
+                      +('Можно добавить фото или выбрать «Без фото».\n' if not row['photo'] and not row.get('text_only') else '')+'Выберите действие ниже.\n'
                       +('ПУБЛИКАЦИЯ ОТКЛЮЧЕНА' if not self.live else ''),reply_markup=buttons)
 
+    def show_inbox(self, offset=0, category='all'):
+        from .inbox import CATEGORIES
+        self.clear_dialog()
+        rows = self.editor.inbox.rows(category)
+        if offset >= len(rows): offset = 0
+        self.tell(f'Подборка: {len(rows)} вариантов. Выберите историю — подготовлю короткий пост и иллюстрацию.')
+        for row in rows[offset:offset+5]:
+            self.api('sendMessage',chat_id=self.owner,
+                text=f"{row['title']}\n\n{row['summary']}\n\n{CATEGORIES[row['category']]} · {row['url']}",
+                reply_markup={'inline_keyboard':[[
+                    {'text':'Подготовить пост','callback_data':f"idea:{row['id']}"},
+                    {'text':'Пропустить','callback_data':f"skipidea:{row['id']}"}]]})
+        self.api('sendMessage',chat_id=self.owner,text='Выберите действие:',reply_markup={'inline_keyboard':[
+            [{'text':'Ещё варианты','callback_data':f'inbox:{offset+5}:{category}'},
+             {'text':'Обновить','callback_data':'refreshinbox'}],
+            [{'text':'Природа','callback_data':'inbox:0:nature'},
+             {'text':'Полезное','callback_data':'inbox:0:education'},
+             {'text':'Все','callback_data':'inbox:0:all'}]]})
+
     def find(self):
-        id = self.editor.discover()
-        if not id and self.editor.provider.name == 'demo':
-            id = next((r['id'] for r in self.store.recent() if r['story_key'] == 'demo' and r['state'] == 'draft' and r['expires'] > time.time()), None)
-        if id:
-            self.preview(id)
-        else:
-            self.tell('Свежего материала, который стоит публиковать, не найдено; возможен повтор уже рассмотренной новости.')
+        if self.editor.provider.name == 'demo':
+            id = self.editor.discover()
+            if id: self.preview(id)
+            return
+        self.tell(self.editor.inbox.refresh())
+        self.show_inbox()
 
     def process(self, update):
         callback = update.get('callback_query')
@@ -81,7 +103,24 @@ class Bot(Moderation):
             if callback['from']['id'] != self.owner or callback.get('message',{}).get('chat',{}).get('id') != self.owner:
                 return
             self.api('answerCallbackQuery',callback_query_id=callback['id'])
-            if self.moderation_callback(callback.get('data','')):
+            data = callback.get('data','')
+            if data == 'refreshinbox':
+                self.find()
+                return
+            if data.startswith('inbox:'):
+                _,offset,category = data.split(':')
+                self.show_inbox(int(offset),category)
+                return
+            if data.startswith(('idea:','skipidea:')):
+                action,id = data.split(':')
+                if action == 'idea':
+                    self.tell('Готовлю короткий пост и иллюстрацию…')
+                    self.preview(self.editor.inbox.draft(int(id)))
+                else:
+                    self.editor.inbox.skip(int(id))
+                    self.tell('Убрано из подборки.')
+                return
+            if self.moderation_callback(data):
                 return
             action,id,version = callback['data'].split(':')
             id,version = int(id),int(version)
@@ -114,6 +153,13 @@ class Bot(Moderation):
                 self.tell(HELP)
         elif command == '/find':
             self.find()
+        elif command == '/inbox':
+            self.show_inbox()
+        elif command == '/budget':
+            from .budget import Budget
+            self.tell(Budget(self.store).report())
+        elif command == '/health':
+            self.tell(self.store.setting('inbox_report','Сбор ещё не запускался.')+'\n'+self.store.setting('source_health',''))
         elif command == '/queue':
             self.queue()
         elif command == '/preview':
@@ -131,7 +177,7 @@ class Bot(Moderation):
                 credit = content.removesuffix('RIGHTS_OK').strip()
                 if not credit or len(credit.encode('utf-16-le'))//2 > 150:
                     raise ValueError('Укажите подпись к фото длиной до 150 символов')
-                self.store.edit(id,photo=message['photo'][-1]['file_id'],credit=credit)
+                self.store.edit(id,photo=message['photo'][-1]['file_id'],credit=credit,text_only=0)
             self.preview(id)
         elif command == '/schedule':
             if not self.live:
@@ -161,8 +207,12 @@ class Bot(Moderation):
                 continue
             draft = self.store.get(id)
             try:
-                result = self.api('sendPhoto',chat_id=self.target,photo=draft['photo'],
-                                  caption=draft['text']+'\n\n'+draft['credit'])
+                if draft.get('text_only'):
+                    result = self.api('sendMessage',chat_id=self.target,text=draft['text'],
+                                      link_preview_options={'is_disabled':True})
+                else:
+                    result = self.api('sendPhoto',chat_id=self.target,photo=draft['photo'],
+                                      caption=draft['text']+'\n\n'+draft['credit'])
                 self.store.finish(id,result['message_id'])
             except Exception:
                 self.store.finish(id)
@@ -171,14 +221,17 @@ class Bot(Moderation):
     def scheduled_research(self):
         if self.store.setting('paused') == '1' or os.getenv('AUTO_RESEARCH','false').lower() != 'true':
             return
-        now = datetime.now(ZoneInfo('Europe/Warsaw'))
-        # Monday, Wednesday, Friday; at most one research attempt per configured date.
-        days = [int(x) for x in os.getenv('RESEARCH_WEEKDAYS','0,2,4').split(',')]
-        hour = int(os.getenv('RESEARCH_HOUR','10'))
-        key = now.date().isoformat()
-        if now.weekday() in days and now.hour >= hour and self.store.setting('last_research') != key:
-            self.store.set('last_research',key)
-            self.find()
+        # Four-hour collection; one broad web-search request per day inside Inbox.
+        now = time.time()
+        if now - float(self.store.setting('scheduled_inbox_attempt','0')) < 4*3600:
+            return
+        self.store.set('scheduled_inbox_attempt',now)
+        report = self.editor.inbox.refresh()
+        local = datetime.now(ZoneInfo('Europe/Warsaw'))
+        day = local.date().isoformat()
+        if local.hour >= 10 and self.store.setting('inbox_notice_day') != day:
+            self.tell(report+'\nОткройте «📥 Подборка», чтобы выбрать историю.')
+            self.store.set('inbox_notice_day',day)
 
     def run(self):
         provider = self.editor.provider

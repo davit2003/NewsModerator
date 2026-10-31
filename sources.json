@@ -1,0 +1,10 @@
+[
+  {"name":"TPN — условия", "url":"https://tpn.gov.pl/komunikat-turystyczny", "kind":"alert", "region":"tatras"},
+  {"name":"TPN — медведи", "url":"https://tpn.gov.pl/co-robic-gdy-spotkasz-niedzwiedzia", "kind":"education", "region":"tatras"},
+  {"name":"TANAP", "url":"https://www.tanap.sk/feed/", "kind":"feed", "region":"tatras"},
+  {"name":"HZS", "url":"https://hzs.sk/feed/", "kind":"feed", "region":"tatras"},
+  {"name":"Wspinanie.pl", "url":"https://wspinanie.pl/feed/", "kind":"feed", "region":"poland"},
+  {"name":"Tatry.sk — ограничения", "url":"https://www.tatry.sk/aktualne-obmedzenia-na-chodnikoch/", "kind":"alert", "region":"tatras"},
+  {"name":"TPN — новости", "url":"https://tpn.gov.pl/aktualnosci", "kind":"index", "region":"tatras"},
+  {"name":"TANAP — новости", "url":"https://www.tanap.sk/", "kind":"index", "region":"tatras"}
+]

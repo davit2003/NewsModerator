@@ -1,199 +1,136 @@
-# Mountain Editor — first working implementation
+# Mountain Editor
 
-A Russian-language Telegram editorial assistant for a guided hiking/climbing community in Poland.
-Tatras first, flexible geography, human approval required. Python 3.12, standard library only.
+Russian-language Telegram editorial assistant for a guided hiking/climbing community in Poland.
+Beginner-friendly nature, education, events and short stories. Tatras first; Europe and world highlights
+also welcome. Every group post requires the owner's approval of the exact current version.
+Python 3.12, standard library only, one Railway worker with SQLite on `/data`.
 
-## What is implemented
+## Daily use
 
-- OpenAI Responses API web search and Gemini Google Search grounding adapters.
-- Two-stage evidence gathering and Russian drafting with an editorial brief.
-- Source URL must occur in provider search metadata; exact-URL duplicate suppression.
-- Recent content and owner-supplied context passed into editorial generation.
-- Owner-only private Telegram controls, button-driven edits and AI rewrites, rejection and scheduling.
-- Reusable photo collection: normal Telegram uploads, session consent, automatic illustrative photo selection.
-- Version-specific approval; edits revoke approval; expired drafts cannot publish.
-- Single-instance SQLite persistence and a daily AI request count ceiling.
-- Automatic discovery on Monday, Wednesday and Friday at/after 10:00 Europe/Warsaw (optional).
-- Ambiguous sends are held for manual review, never automatically retried.
-- Docker/Railway configuration; publishing and scheduled research disabled by default.
+- **📥 Подборка**: browse saved story cards; five per screen, more options and topic filters.
+- **🔎 Найти материал** or `/find`: refresh collection and open the inbox. Refreshes have a 15-minute cooldown.
+- **Подготовить пост**: generate a short Russian draft and find an illustrative Commons photograph.
+- **Опубликовать**: approve this exact draft/photo version and publish. Nothing publishes from merely selecting an idea.
+- **Без фото**: explicitly select text-only mode, review the new version, then approve.
+- **📋 Черновики**: return to drafts. Text/photo edits revoke existing approval.
+- **💵 Бюджет** or `/budget`: conservative estimated AI spend, reservations and monthly allowance.
+- `/health`: latest collection counts, errors and status for each source.
+- `/context details`: replace optional trip/Instagram context used when writing posts. Include destination,
+  date, audience and the angle desired. The bot never invents trip availability.
+- `/pause`, `/resume`: pause/resume automatic research and publishing.
+- `/help`: advanced editing, scheduling and photo collection commands.
 
-## Try locally without accounts
+## Collection and editorial inbox
 
-From this directory:
+`sources.json` contains curated RSS feeds, official rolling bulletins, educational pages and news indexes.
+The initial registry covers TPN, TANAP, HZS, Tatry.sk and Wspinanie; it is a small verified starting set,
+not a claim to monitor 30 sites. Extend the registry as the owner supplies sources. A source may have more
+than one endpoint. TANAP has a direct article fallback when its feed has no usable recent entries.
 
-```bash
-python -m mountain_editor demo
-python -m unittest discover -s tests -v
-```
+The collector checks robots.txt, skips unavailable/disallowed policies, uses an identifying User-Agent,
+bounded responses/timeouts, same-host redirects and at most four network workers. It does not bypass
+logins or paywalls or copy Instagram photos. Feeds provide dates and article text/excerpts; direct pages
+use article/main text when available. Source text is untrusted data. HTML changes can require adapter fixes.
 
-The demo prints a clearly labeled example community post, makes no network requests,
-and does not pretend to report current news. No dependencies to install.
+Automatic collection runs every four hours when AUTO_RESEARCH=true. Source status and extracted items
+persist across restarts. Content hashes detect changes at the same URL. AI shortlists up to six items
+per batch; one supplemental web-search request per UTC day can contribute up to six more. Each search
+request has at most two tool calls. Source links must match collected/provider-cited URLs. Tracking
+parameters are removed. Story keys and previous ideas help suppress duplicate events, with URL checks
+as a second guard. This is model-assisted deduplication, not a perfect semantic duplicate detector.
 
-## Deployment: Railway
+The target is a useful rolling selection, not a guaranteed number of daily stories. News requires a
+publication date within 14 days; timeless educational pieces are labelled accordingly. Ideas expire
+(news at most 7 days in the inbox, evergreen 14 days, alerts 6 hours). Current warnings receive an
+additional official-source check before drafting. Drafts expire after at most 3 days (alerts 6 hours,
+and never after the source idea expiry). Recheck changed conditions during human approval.
 
-1. Put this directory's contents at the root of a private GitHub repository.
-2. Create your bot through Telegram's verified @BotFather. Keep the token private.
-3. Determine your numeric Telegram user ID and the destination chat ID through your own
-   Telegram Bot API updates (a private `/start` reveals `message.from.id`; a group command
-   addressed to the bot reveals `message.chat.id`). Do this before running the worker,
-   never run two getUpdates consumers. Avoid exposing the bot token in screenshots or logs.
-4. Add the bot to the destination group with permission to send photos/messages.
-   For a channel, grant the required administrator posting permission. Keep privacy mode enabled.
-5. In Railway, create a project and deploy the GitHub repository. Dockerfile is included.
-6. Attach a persistent volume mounted at `/data`. Use exactly ONE replica. Disable sleeping.
-7. Configure the variables below using Railway's private variable settings.
-8. Open the bot privately and send `/start`. Try `/find`, attach a photo, then `/preview ID`.
-9. With real AI configured, validate at least one full post in a separate test group first.
-10. Set the real target, `PUBLISH_ENABLED=true`, and optionally `AUTO_RESEARCH=true`.
+The first screen favours topic/geography diversity. The brief aims for 60% Tatras/nearby, 25% Europe,
+15% worldwide over time without forcing weak content. Skipped ideas remain in history. No automatic
+engagement tracking or learned preference model is implemented yet.
 
-The process runs on Railway; AI inference runs at your chosen provider.
-GitHub stores code, not credentials. `.env.example` documents settings but is not auto-loaded.
-For local execution, set environment variables through your shell or IDE securely.
-No public domain or webhook is needed: Telegram long polling is used.
+## $30 operating ceiling
+
+Default allocation: **$18/month AI/search, $12 hosting and buffer**. No paid scraping or image service.
+The code caps AI_MONTHLY_BUDGET_USD at 18; lowering it is supported. Budget accounting is in UTC calendar
+months, stored in SQLite, and survives restarts. It starts at deployment; it cannot recover prior spend
+or track another app sharing the API key.
+
+Only OpenAI `gpt-5.4-mini` (or `gpt-5.4-mini-2026-03-17`) is enabled for the priced budget path. Unknown
+models and Gemini fail closed until their pricing/accounting is implemented. Published baseline rates
+checked 2026-10-31: $0.75/M input, $4.50/M output, $0.01/search call.
+
+Before each request the app reserves a conservative amount for input/output and up to two search calls.
+Successful responses reconcile token usage with full-price input (no cached-input discount), an extra
+128k-token search allowance per tool call, and a 20% buffer. Missing usage, errors and ambiguous timeouts
+retain the full reservation. Thus `/budget` is usually higher than the invoice, and may stop AI early.
+It is an application guard based on configured rates, **not a guarantee about the provider invoice**.
+No automatic retries of chargeable calls. MAX_AI_CALLS_PER_DAY is an additional guard (default 24,
+maximum 24; an existing environment value of 12 remains respected).
+
+At the allowance boundary new AI operations stop; the inbox and prepared drafts stay available and
+approved drafts can still publish. Generating a new draft from an idea still requires AI allowance.
+
+**Railway billing must also be bounded:** Workspace Usage → Set Usage Limits → Compute hard limit
+$10, email alert $5. This workspace-wide limit can stop all workspace workloads. Confirm that this is
+appropriate if the workspace hosts anything else. The code cannot set or inspect that account billing
+limit through the connected OAuth tools. $2 remains as a buffer. Taxes and unrelated subscriptions are
+not included; provider billing cycles may differ. Do not assume the total ceiling is enforced until
+Railway's limit is configured. Keep the API key/project dedicated to this bot and review provider billing.
+
+Official pricing: https://developers.openai.com/api/docs/models/gpt-5.4-mini
+https://developers.openai.com/api/docs/pricing
+https://docs.railway.com/pricing/cost-control
+
+## Photos and approval
+
+Commons search requires no extra key. Only supported CC BY / CC BY-SA / CC0 metadata, identifiable
+authors, matching licence URLs and supported image hosts pass the filter. Attribution includes the
+source, licence, author and illustration/resizing label; complex attribution and oversized captions
+are skipped. The app does not crop images. Metadata is saved with the draft version.
+
+The actual image is uploaded to the private preview and stored as a Telegram file ID before approval.
+Group publication uses the same image, not a mutable external URL. Metadata filtering is not legal
+clearance; review image relevance, visible people/logos and attribution. Search matching is text-based.
+Use **Изменить фото → Найти другое фото** or optional **Мои фотографии** uploads with rights confirmation.
+If no suitable image is found, the draft is preserved and **Без фото** remains available.
+
+Only the configured owner in their private chat can operate controls. Stale approval buttons fail.
+Editing text or images revokes approval. Claims are atomic, and uncertain Telegram sends are held
+for manual review without automatic reposting. Demo mode cannot publish.
+
+## Deployment
+
+Existing installations: push the code to the linked GitHub main branch. The Dockerfile includes
+`sources.json`. SQLite tables and the text_only column are migrated automatically without removing drafts.
+Keep ONE replica and retain the volume at `/data`. Never run two Telegram getUpdates consumers.
+
+New installation: create a Telegram bot, add it to the destination group with posting permission,
+connect this repo to Railway, attach `/data`, configure variables, and send `/start` privately.
 
 | Variable | Meaning |
 |---|---|
-| `AI_PROVIDER` | `demo`, `openai`, or `gemini` |
-| `AI_MODEL` | Exact model ID available in your account, supporting that provider's search tool |
-| `OPENAI_API_KEY` | Needed only for OpenAI |
-| `GEMINI_API_KEY` | Needed only for Gemini |
-| `TELEGRAM_BOT_TOKEN` | Token from BotFather |
-| `OWNER_TELEGRAM_ID` | Your numeric Telegram user ID; never assigned by first visitor |
-| `TARGET_CHAT_ID` | Numeric group ID or supported channel identifier |
-| `DB_PATH` | `/data/editor.db` on Railway |
-| `PUBLISH_ENABLED` | `false` initially; `true` enables approved sends |
-| `AUTO_RESEARCH` | `false` initially; `true` enables scheduled discovery |
-| `MAX_AI_CALLS_PER_DAY` | Default 12; counts attempted provider calls in UTC |
-| `RESEARCH_WEEKDAYS` | Default `0,2,4` (Monday=0) |
-| `RESEARCH_HOUR` | Default 10, Europe/Warsaw with daylight saving |
+| `AI_PROVIDER` | `openai` for live budgeted operation, `demo` for offline demo |
+| `AI_MODEL` | `gpt-5.4-mini` |
+| `OPENAI_API_KEY` | Dedicated OpenAI API key; never commit it |
+| `TELEGRAM_BOT_TOKEN` | BotFather token |
+| `OWNER_TELEGRAM_ID` | Numeric owner ID |
+| `TARGET_CHAT_ID` | Destination group/channel ID |
+| `DB_PATH` | `/data/editor.db` |
+| `PUBLISH_ENABLED` | `false` initially; `true` permits approved sends |
+| `AUTO_RESEARCH` | `false` initially; `true` enables four-hour collection |
+| `AI_MONTHLY_BUDGET_USD` | Default and maximum `18`; may be lowered |
+| `MAX_AI_CALLS_PER_DAY` | Default/max 24; existing lower limits remain honoured |
+| `AUTO_PHOTOS` | Default `true` |
+| `COMMONS_USER_AGENT` | Optional deployment/contact identity for Commons |
 
-Run `python -m mountain_editor check` for configuration presence checks (no API validation).
-API billing is separate from chat subscriptions. The request count ceiling is NOT a currency
-budget: search tool usage and output length still affect charges. Configure provider alerts too.
+Old RESEARCH_WEEKDAYS/RESEARCH_HOUR settings are superseded by four-hour collection; the bot sends
+at most one automatic inbox summary per Warsaw date, during a collection at/after 10:00.
+No public domain or webhook is necessary. Python runs on Railway; model inference/search runs at OpenAI.
 
-## Automatic photos — no uploads or extra API key required
+## Verification
 
-Newly generated drafts now search Wikimedia Commons automatically using a location/subject query
-produced during the existing drafting call. Demo posts use a generic mountain landscape query.
-The bot sends a complete private preview with the selected image and full credit. Choose
-**Изменить фото → Найти другое фото** to search for another candidate. Uploaded photos are optional.
-Existing news drafts created before this update have no image query: generate a fresh draft to use this feature.
-
-The default `AUTO_PHOTOS=true` requires no extra credentials or AI calls. Set it to `false` to disable
-Commons access. `COMMONS_USER_AGENT` may optionally identify your own deployment/contact URL.
-
-The filter accepts exact CC BY / CC BY-SA 2.0, 2.5, 3.0, 4.0 and CC0 metadata with matching license URLs,
-known authors, no listed restrictions or custom attribution requirements, and JPEG/PNG images on
-Wikimedia's image host. Complex credits, unsupported licenses, unknown authors and insufficient caption space
-are skipped. The post includes author, license link, source page and an illustrative/resized label. Older licenses
-also include the supplied title; a simple original-source URL is retained when provided.
-No cropping, overlays or generated edits are applied. Reuse of CC BY-SA photos retains that license.
-Do not remove the photo credit when copying a post outside the bot.
-
-License metadata and retrieval time are saved with the draft version for audit. The image is first
-uploaded to the private Telegram preview and stored as a Telegram file ID, so approval publishes that
-same image rather than refetching a changing URL. Wikimedia metadata can be wrong and does not clear
-personality/trademark rights; this is conservative automated filtering, not legal clearance. Review
-relevance and visible people/logos during normal approval. Pictures are illustrations, not claimed to
-show the specific news event. Matching is based on search relevance, not visual AI verification.
-
-If Commons is unavailable or no qualifying photo is found, the draft is retained. An optional uploaded
-photo collection can supply an illustrative fallback; otherwise nothing publishes until a photo is
-selected. The bot never substitutes an unlicensed image. Long text may need shortening to fit attribution.
-Photo discovery needs outbound HTTPS access to commons.wikimedia.org; Telegram retrieves the image
-from upload.wikimedia.org or thumb.wikimedia.org. Live Commons discovery returned qualifying Tatra
-photos, and 37 offline tests cover filters and workflow; Telegram delivery from Railway must
-be checked on Railway.
-
-References: https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia
-and https://creativecommons.org/licenses/by/4.0/ .
-
-## Daily use — buttons first
-
-After Railway deploys this update, send `/start` once to show the new menu.
-No new environment variables or manual database migration are needed. Existing drafts remain intact.
-
-Optional photo collection setup:
-
-1. Tap **🖼 Мои фотографии** and confirm you can reuse the photos you are about to upload.
-2. Send your photos normally, individually or as an album, then tap **Готово**.
-   Consent applies to that upload session for one hour; approved photos remain reusable afterward.
-   Optional captions describe location, season, or subject to improve matching. No IDs or magic text.
-3. Tap **🔎 Найти материал**. The bot prepares a draft and selects a photo from your collection.
-4. Under the preview, choose **✅ Опубликовать**, **✏️ Изменить текст**, **🖼 Изменить фото**,
-   **🔄 Переписать**, or **❌ Пропустить**. Text changes and rewrite instructions are normal replies.
-5. **Изменить фото** offers another library image or a normal upload. For a draft-specific album,
-   the first image is attached; remaining images are saved for later. Tap **Готово** for the preview.
-6. **📋 Черновики** opens active drafts. **↩️ Отмена** cancels the current interaction.
-
-Only send photos you own or may reuse with the generic attribution
-“Фото из коллекции организатора. Иллюстрация.” Photos requiring special attribution should use the
-legacy `/photo ID CREDIT RIGHTS_OK` command with the full required credit instead of the collection.
-Collection selection uses caption word matching and least-recently-selected ordering, not visual AI
-recognition. If no captions match it selects an illustrative image by rotation: verify relevance before
-approval. All collection photos are explicitly labeled illustrative, not evidence of the news event.
-File IDs, descriptions, consent records and selection timestamps are stored in the persistent database;
-image bytes stay on Telegram. File IDs are tied to this bot and cannot be migrated to a different bot.
-
-Advanced commands remain available:
-
-- `/find`, `/queue`, `/preview ID`, `/photos`, `/cancel`.
-- `/edit ID FULL TEXT`: replace text; the button-based edit flow automatically preserves source links.
-- `/rewrite ID feedback`: rewrite using AI.
-- `/schedule ID VERSION 2026-12-01T18:00:00+01:00`: approve an exact version for a future time.
-- `/context ...`: replace style examples, Instagram context and confirmed trip information.
-- `/pause` and `/resume`: stop/resume scheduled research and publishing; manual discovery still works.
-
-Any photo or text change revokes approval. Stale controls cannot mutate a newer draft. Upload/edit
-conversations survive restarts but expire after one hour. Publishing remains disabled unless explicitly
-configured. No Telegram or AI credentials are changed by this update.
-
-Drafts expire after 24 hours, or six hours when marked safety-sensitive by the model.
-This is an upper limit after discovery, not evidence that a source is fresh. Verify event dates
-and safety claims during review. Text is capped at 850 UTF-16 units to leave room for credits.
-Long source URLs may cause a draft to be rejected rather than truncated.
-
-## Reliability and recovery
-
-Only owner private-chat commands work. Buttons encode draft ID and version; the database checks
-both. Publication claims are atomic. A Telegram timeout, or restart during a send, results in
-`uncertain` state. Check the group manually; this version intentionally has no blind retry command.
-Commands are recorded before processing, so a crash can lose a command, but cannot replay a publish.
-Use **📋 Черновики** after a restart; database states include `uncertain` for manual recovery. Provider requests are synchronous; research can delay button processing
-and scheduled posts by several minutes. Scheduled delivery is best effort, not exact-time guaranteed.
-Scheduled research attempts are recorded before execution; failures do not loop or accumulate AI charges.
-
-Configure Railway volume backups before production. For a consistent manual backup, stop the worker
-and copy the database plus any WAL/SHM files, or use SQLite's online backup API. Restore with the worker
-stopped. Backups contain private editorial context and Telegram identifiers; keep them private.
-
-## Honest scope and next steps
-
-This is a runnable MVP, not a deployed service. No credentials are bundled. Offline tests and the demo
-have been run; live model access, model output quality, Telegram permissions, Docker build and Railway
-deployment still require validation in your accounts.
-
-Not yet included: direct RSS ingestion, visual AI photo tagging,
-Instagram account ingestion, engagement analytics, semantic duplicate clustering, independent source
-fact-checking, automatic learning from edits, or automated backups. Grounded search and a second writing
-pass help quality but are not an independent fact-check. Owner review remains necessary.
-
-Google Search grounding can return redirect URLs and search suggestion metadata. Before enabling Gemini
-in production, review Google's current grounding attribution/display requirements for your interface.
-This MVP retains source links but does not render Google's HTML search suggestions in Telegram.
-
-Recommended next milestone: connect one provider, collect ten representative story dossiers, compare
-Russian drafts from the candidate models with a fixed rubric (accuracy, relevance, hook, naturalness,
-editing effort, cost), and choose from observed results. The model ID is deliberately not hardcoded.
-Then consider visual photo tagging and RSS sources based on the pilot's actual gaps.
-
-## Documentation used
-
-- https://developers.openai.com/api/docs/guides/tools-web-search
-- https://ai.google.dev/gemini-api/docs/google-search
-- https://core.telegram.org/bots/api
-- https://docs.railway.com/services
-- https://docs.railway.com/volumes
-
-Checked 2026-10-16. Provider capabilities and billing can change.
-
+`python -m unittest discover -s tests -v` runs offline tests for approval, source/date handling,
+persistence, budget reservations, provider errors, photo licensing and inbox operations.
+`python -m mountain_editor demo` runs a clearly labelled offline example.
+`python -m mountain_editor check` checks configuration presence, not API access or billing.

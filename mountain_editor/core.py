@@ -24,6 +24,9 @@ class Store:
           description TEXT NOT NULL, credit TEXT NOT NULL, confirmed_by INTEGER NOT NULL,
           confirmed_at REAL NOT NULL, last_used REAL NOT NULL DEFAULT 0);
         ''')
+        columns = {r[1] for r in self.db.execute('PRAGMA table_info(drafts)')}
+        if 'text_only' not in columns:
+            self.db.execute('ALTER TABLE drafts ADD COLUMN text_only INTEGER NOT NULL DEFAULT 0')
         # A crash after sending but before recording success is ambiguous. Never resend automatically.
         self.db.execute("UPDATE drafts SET state='uncertain' WHERE state='publishing'")
         self.db.commit()
@@ -56,7 +59,7 @@ class Store:
             raise ValueError('Текст должен содержать 1–850 символов UTF-16 (включая ссылки)')
 
     def edit(self, id, **changes):
-        if set(changes) - {'text', 'photo', 'credit'}:
+        if set(changes) - {'text', 'photo', 'credit', 'text_only'}:
             raise ValueError('Invalid edit')
         if 'text' in changes:
             self.validate_text(changes['text'])
@@ -84,9 +87,9 @@ class Store:
                 raise ValueError('Откройте актуальный предпросмотр')
             if row['expires'] <= max(now, due):
                 raise ValueError('Новость устарела или истечёт до публикации. Найдите свежий источник.')
-            if not row['photo'] or not row['credit']:
+            if not row['text_only'] and (not row['photo'] or not row['credit']):
                 raise ValueError('Сначала добавьте фото с разрешением на использование и подписью')
-            if len((row['text']+'\n\n'+row['credit']).encode('utf-16-le'))//2 > 1024:
+            if len((row['text']+'\n\n'+(row['credit'] or '')).encode('utf-16-le'))//2 > 1024:
                 raise ValueError('Слишком длинная подпись к фото')
             self.db.execute("UPDATE drafts SET state='approved',due=?,approved_by=?,approved_version=? WHERE id=?",
                             (due,user,version,id))
@@ -131,7 +134,7 @@ class Store:
         return [dict(r) for r in self.db.execute('SELECT * FROM photos ORDER BY last_used,id')]
 
     def use_photo(self, draft_id, photo):
-        self.edit(draft_id,photo=photo['file_id'],credit=photo['credit'])
+        self.edit(draft_id,photo=photo['file_id'],credit=photo['credit'],text_only=0)
         with self.db:
             self.db.execute('UPDATE photos SET last_used=? WHERE id=?', (time.time(),photo['id']))
 

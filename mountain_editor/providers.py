@@ -101,16 +101,26 @@ class Provider:
     def call(self, prompt, search=False, max_tokens=4500):
         if self.name == 'demo':
             raise ValueError('Demo does not call external AI')
-        self.store.consume_call(datetime.now(timezone.utc).date().isoformat(), int(os.getenv('MAX_AI_CALLS_PER_DAY','12')))
+        from .budget import Budget
+        if self.name != 'openai':
+            raise ValueError('Для бюджета $30 включён OpenAI gpt-5.4-mini. Другие провайдеры требуют отдельного расчёта бюджета.')
+        max_tokens = min(max_tokens, 4500)
+        if len(prompt.encode('utf-8')) > 100000:
+            raise ValueError('Слишком большой запрос; сократите контекст.')
+        self.store.consume_call(datetime.now(timezone.utc).date().isoformat(), min(24, int(os.getenv('MAX_AI_CALLS_PER_DAY','24'))))
+        budget = Budget(self.store)
+        reservation = budget.reserve(self.model, prompt, max_tokens, search)
         safe_model = self.model if re.fullmatch(r'[a-zA-Z0-9._-]{1,80}',self.model) and not self.model.startswith('sk-') else '[invalid model setting]'
         print(f'AI request: provider={self.name} model={safe_model} search={search}',flush=True)
         if self.name == 'openai':
             payload = {'model': self.model, 'input': prompt, 'max_output_tokens': max_tokens}
             if search:
-                payload['tools'] = [{'type':'web_search'}]
+                payload['tools'] = [{'type':'web_search', 'search_context_size':'low'}]
+                payload['max_tool_calls'] = 2
                 payload['include'] = ['web_search_call.action.sources']
             data = post('https://api.openai.com/v1/responses', payload,
                         {'Authorization':'Bearer '+os.environ['OPENAI_API_KEY'].strip()})
+            budget.settle(reservation, data)
             print('AI response: provider=openai status='+str(data.get('status','unknown')),flush=True)
             texts, sources = [], []
             for item in data.get('output',[]):

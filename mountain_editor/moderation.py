@@ -8,7 +8,8 @@ from . import commons
 
 
 MENU = {
-    'keyboard': [[{'text':'🔎 Найти материал'}, {'text':'📋 Черновики'}],
+    'keyboard': [[{'text':'📥 Подборка'}, {'text':'🔎 Найти материал'}],
+                 [{'text':'📋 Черновики'}, {'text':'💵 Бюджет'}],
                  [{'text':'🖼 Мои фотографии'}, {'text':'↩️ Отмена'}]],
     'resize_keyboard': True,
 }
@@ -37,7 +38,7 @@ class Moderation:
                 file_id = preview['photo'][-1]['file_id']
             except Exception:
                 continue
-            self.store.edit(id,photo=file_id,credit=photo['credit'])
+            self.store.edit(id,photo=file_id,credit=photo['credit'],text_only=0)
             seen.append(photo['page_id'])
             self.store.set(f'commons_seen:{id}',json.dumps(seen))
             self.store.set(f'photo_evidence:{id}:{self.store.get(id)["version"]}',
@@ -127,7 +128,7 @@ class Moderation:
                 self.menu('Действие отменено.')
             return True
         action,_,rest = data.partition(':')
-        if action not in ('preview','edit','rewrite','photo','another','upload','webphoto'):
+        if action not in ('preview','edit','rewrite','photo','another','upload','webphoto','textonly'):
             return False
         id,version = map(int,rest.split(':'))
         row = self.valid_draft(id,version)
@@ -138,6 +139,10 @@ class Moderation:
             self.set_dialog(action,draft=id,version=version)
             self.menu('Пришлите новый текст обычным сообщением. Ссылка на источник сохранится.' if action=='edit'
                       else 'Что изменить? Например: «Короче и с более конкретным началом».')
+        elif action == 'textonly':
+            self.clear_dialog()
+            self.store.edit(id,photo=None,credit=None,text_only=1)
+            self.preview(id)
         elif action == 'photo':
             self.clear_dialog()
             self.api('sendMessage',chat_id=self.owner,text='Как заменить фото?',reply_markup={
@@ -162,6 +167,13 @@ class Moderation:
         return True
 
     def moderation_message(self, message, text):
+        if text == '📥 Подборка':
+            self.show_inbox()
+            return True
+        if text == '💵 Бюджет':
+            from .budget import Budget
+            self.tell(Budget(self.store).report())
+            return True
         if text in ('↩️ Отмена','/cancel'):
             self.clear_dialog()
             self.menu('Действие отменено.')
@@ -192,7 +204,7 @@ class Moderation:
             credit = 'Фото из коллекции организатора. Иллюстрация.'
             self.store.add_photo(photo['file_unique_id'],photo['file_id'],text,credit,self.owner)
             if state.get('draft') and not state.get('attached'):
-                self.store.edit(state['draft'],photo=photo['file_id'],credit=credit)
+                self.store.edit(state['draft'],photo=photo['file_id'],credit=credit,text_only=0)
                 state['attached'] = True
                 state['version'] = self.store.get(state['draft'])['version']
                 self.store.set('dialog',json.dumps(state))
