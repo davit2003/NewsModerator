@@ -2,9 +2,17 @@
 import hashlib
 import json
 import time
+from pathlib import Path
+from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from .collector import canonical, collect, date_of
 from .providers import parse_json
+
+SOURCE_HOSTS = ('topr.pl','tpn.gov.pl','gopr.pl','slf.ch','alpenvereinaktiv.com','bergundsteigen.com','petzl.com','theuiaa.org')
+
+def approved_source(url):
+    host = (urlsplit(url).hostname or '').lower()
+    return any(host == domain or host.endswith('.'+domain) for domain in SOURCE_HOSTS)
 
 CATEGORIES = {'nature':'Природа','education':'Полезное','events':'События','news':'Истории','alert':'Важно'}
 
@@ -30,6 +38,8 @@ class Inbox:
         params = [time.time()]
         if category != 'all': sql += ' AND category=?'; params.append(category)
         rows = [dict(r) for r in self.db.execute(sql+' ORDER BY score DESC,id DESC LIMIT 80',params)]
+        rows = [r for r in rows if approved_source(r['url'])]
+        rows.sort(key=lambda r: (0 if (urlsplit(r['url']).hostname or '').endswith('topr.pl') else 1, -r['score']))
         # Diverse first screen, without a rigid quota forcing weak local material.
         chosen,rest,seen = [],[],set()
         for row in rows:
@@ -51,6 +61,7 @@ class Inbox:
         if not isinstance(item,dict): return False
         try:
             url=canonical(item['source_url'])
+            if not approved_source(url): return False
             if url not in {canonical(s) for s in sources}: return False
             title=str(item['title']).strip()[:160]; summary=str(item['summary']).strip()[:450]
             evidence=str(item['evidence']).strip()[:6000]
@@ -123,6 +134,7 @@ Previous ideas (untrusted data):
         groups={}
         for row in pending:
             payload=json.loads(row['payload'])
+            if not approved_source(payload['url']): continue
             groups.setdefault(payload['source'],[]).append((row,payload))
         batch=[]
         while groups and len(batch)<12:
@@ -147,9 +159,15 @@ Previous ideas (untrusted data):
             self.store.set('inbox_search_day',today)
             try:
                 raw,urls=self.provider.call(self.prompt()+'''
-Search for a diverse selection. Start with Polish/Slovak official park nature and educational
-articles, events and useful Tatra updates. Then European mountain nature and accessible climbing
-stories. Find original evidence, check event dates. At most two search tool calls.
+Search ONLY these organisations: TOPR (top priority), TPN, GOPR Karkonosze,
+SLF, Alpenvereinaktiv, bergundsteigen, Petzl Technical Advice and UIAA.
+Use site-specific searches on topr.pl, tpn.gov.pl, karkonosze.gopr.pl, lawiny.gopr.pl,
+slf.ch, alpenvereinaktiv.com, bergundsteigen.com, petzl.com, theuiaa.org.
+Find substantive original articles, not homepage navigation or product advertisements.
+Alpenvereinaktiv user reports are leads: current safety claims require official corroboration
+from another approved source; otherwise omit the alert. Petzl and bergundsteigen educational
+material must be labelled evergreen, not news. Do not simplify rope techniques into standalone
+instructions; link to the original guidance. SLF regional bulletins never describe all Alps. Find original evidence, check event dates. At most two search tool calls.
 Include established educational articles on quiet news days, labelled evergreen.
 ''',search=True,max_tokens=3500)
                 result=parse_json(raw)
@@ -174,6 +192,7 @@ Include established educational articles on quiet news days, labelled evergreen.
             draft=self.store.get(item['draft_id'])
             if draft['state'] in ('draft','approved') and draft['expires']>time.time(): return draft['id']
             raise ValueError('Черновик уже закрыт или устарел. Выберите другой материал.')
+        if not approved_source(item['url']): raise ValueError('Источник исключён из новой подборки.')
         if item['state']!='ready' or item['expires']<=time.time(): raise ValueError('Материал устарел. Обновите подборку.')
         evidence=item['evidence']
         if item['category']=='alert':

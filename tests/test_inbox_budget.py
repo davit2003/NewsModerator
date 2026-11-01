@@ -17,16 +17,16 @@ class InboxTests(unittest.TestCase):
         self.s=Store(':memory:'); self.p=Mock(name='provider'); self.p.name='openai'
         self.box=Inbox(self.s,self.p,'brief')
         self.item=dict(title='Почему горы меняют цвет?',summary='Короткая история о природе.',
-            source_url='https://example.org/story?utm_source=openai', evidence='Source-supported facts. '*12,
+            source_url='https://tpn.gov.pl/story?utm_source=openai', evidence='Source-supported facts. '*12,
             category='nature',region='tatras',freshness='evergreen',score=9,verified=True,event_key='mountain leaf colours')
 
     def test_tracking_links_deduplicate(self):
-        self.assertTrue(self.box.add(self.item,['https://example.org/story']))
-        self.assertFalse(self.box.add({**self.item,'source_url':'https://example.org/story'},['https://example.org/story']))
-        self.assertEqual(self.box.rows()[0]['url'],'https://example.org/story')
+        self.assertTrue(self.box.add(self.item,['https://tpn.gov.pl/story']))
+        self.assertFalse(self.box.add({**self.item,'source_url':'https://tpn.gov.pl/story'},['https://tpn.gov.pl/story']))
+        self.assertEqual(self.box.rows()[0]['url'],'https://tpn.gov.pl/story')
 
     def test_no_unverified_or_uncited_ideas(self):
-        self.assertFalse(self.box.add(self.item,['https://example.org/other']))
+        self.assertFalse(self.box.add(self.item,['https://tpn.gov.pl/other']))
         self.assertFalse(self.box.add({**self.item,'verified':False},[self.item['source_url']]))
         self.assertFalse(self.box.add({**self.item,'score':4},[self.item['source_url']]))
 
@@ -55,19 +55,19 @@ class InboxTests(unittest.TestCase):
 
     def test_feed_date_and_content(self):
         from email.utils import formatdate
-        feed=f'<rss><channel><item><title>Title</title><link>https://example.org/new</link><pubDate>{formatdate(usegmt=True)}</pubDate><description>{"Nature facts. "*20}</description></item><item><title>old</title><pubDate>Mon, 01 Jan 2001 00:00:00 GMT</pubDate><link>https://example.org/old</link></item></channel></rss>'
+        feed=f'<rss><channel><item><title>Title</title><link>https://tpn.gov.pl/new</link><pubDate>{formatdate(usegmt=True)}</pubDate><description>{"Nature facts. "*20}</description></item><item><title>old</title><pubDate>Mon, 01 Jan 2001 00:00:00 GMT</pubDate><link>https://tpn.gov.pl/old</link></item></channel></rss>'
         with patch('mountain_editor.collector.allowed',return_value=True),patch('mountain_editor.collector.fetch',return_value=feed):
-            rows,status=collect_source({'url':'https://example.org/feed','name':'Example','kind':'feed','region':'tatras'})
+            rows,status=collect_source({'url':'https://tpn.gov.pl/feed','name':'Example','kind':'feed','region':'tatras'})
         self.assertEqual(status,'ok'); self.assertEqual(len(rows),1)
 
     def test_index_skips_images_and_fetches_article(self):
         html='<main><a href="/story-123/">Story</a><a href="/image-2026.webp">Image</a></main>'
         article='<article>'+('Interesting mountain facts. '*20)+'</article>'
         with patch('mountain_editor.collector.allowed',return_value=True),patch('mountain_editor.collector.fetch',side_effect=[html,article]) as fetch:
-            rows,status=collect_source({'url':'https://example.org/','name':'Example','kind':'index','region':'tatras'})
+            rows,status=collect_source({'url':'https://tpn.gov.pl/','name':'Example','kind':'index','region':'tatras'})
         self.assertEqual(fetch.call_count,2)
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]['url'],'https://example.org/story-123')
+        self.assertEqual(rows[0]['url'],'https://tpn.gov.pl/story-123')
 
     def test_explicit_text_only_revokes_approval_and_publishes_message(self):
         id=self.s.add('x','Story',[],'')

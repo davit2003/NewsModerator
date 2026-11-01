@@ -23,9 +23,13 @@ Python 3.12, standard library only, one Railway worker with SQLite on `/data`.
 ## Collection and editorial inbox
 
 `sources.json` contains curated RSS feeds, official rolling bulletins, educational pages and news indexes.
-The initial registry covers TPN, TANAP, HZS, Tatry.sk and Wspinanie; it is a small verified starting set,
-not a claim to monitor 30 sites. Extend the registry as the owner supplies sources. A source may have more
-than one endpoint. TANAP has a direct article fallback when its feed has no usable recent entries.
+The registry now uses TOPR (first priority), TPN, GOPR Karkonosze, SLF,
+Alpenvereinaktiv, bergundsteigen, Petzl and UIAA. Supplemental search and new inbox candidates
+are restricted to these organisations. Historical drafts are retained; old-source ideas are hidden.
+Homepages and dynamic bulletins may yield only leads; search supplies substantive article URLs.
+SLF uses public pages for now, not its authenticated data API. Educational materials are evergreen;
+Alpenvereinaktiv user reports require official corroboration for safety alerts. Copied image links
+are not sources or evidence of image reuse permission.
 
 The collector checks robots.txt, skips unavailable/disallowed policies, uses an identifying User-Agent,
 bounded responses/timeouts, same-host redirects and at most four network workers. It does not bypass

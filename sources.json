@@ -1,10 +1,79 @@
 [
-  {"name":"TPN — условия", "url":"https://tpn.gov.pl/komunikat-turystyczny", "kind":"alert", "region":"tatras"},
-  {"name":"TPN — медведи", "url":"https://tpn.gov.pl/co-robic-gdy-spotkasz-niedzwiedzia", "kind":"education", "region":"tatras"},
-  {"name":"TANAP", "url":"https://www.tanap.sk/feed/", "kind":"feed", "region":"tatras"},
-  {"name":"HZS", "url":"https://hzs.sk/feed/", "kind":"feed", "region":"tatras"},
-  {"name":"Wspinanie.pl", "url":"https://wspinanie.pl/feed/", "kind":"feed", "region":"poland"},
-  {"name":"Tatry.sk — ограничения", "url":"https://www.tatry.sk/aktualne-obmedzenia-na-chodnikoch/", "kind":"alert", "region":"tatras"},
-  {"name":"TPN — новости", "url":"https://tpn.gov.pl/aktualnosci", "kind":"index", "region":"tatras"},
-  {"name":"TANAP — новости", "url":"https://www.tanap.sk/", "kind":"index", "region":"tatras"}
+  {
+    "name": "TOPR",
+    "url": "https://topr.pl/",
+    "kind": "article",
+    "region": "tatras",
+    "priority": 1
+  },
+  {
+    "name": "TOPR — лавины",
+    "url": "https://lawiny.topr.pl/",
+    "kind": "alert",
+    "region": "tatras",
+    "priority": 1
+  },
+  {
+    "name": "TPN — условия",
+    "url": "https://tpn.gov.pl/komunikat-turystyczny",
+    "kind": "alert",
+    "region": "tatras",
+    "priority": 2
+  },
+  {
+    "name": "GOPR Karkonosze",
+    "url": "https://karkonosze.gopr.pl/",
+    "kind": "article",
+    "region": "poland",
+    "priority": 2
+  },
+  {
+    "name": "GOPR — лавины",
+    "url": "https://lawiny.gopr.pl/",
+    "kind": "alert",
+    "region": "poland",
+    "priority": 2
+  },
+  {
+    "name": "SLF — бюллетень",
+    "url": "https://www.slf.ch/en/avalanche-bulletin-and-snow-situation/",
+    "kind": "alert",
+    "region": "europe",
+    "priority": 2
+  },
+  {
+    "name": "Alpenvereinaktiv — проверять сообщения пользователей",
+    "url": "https://www.alpenvereinaktiv.com/",
+    "kind": "article",
+    "region": "europe",
+    "priority": 2
+  },
+  {
+    "name": "bergundsteigen",
+    "url": "https://www.bergundsteigen.com/",
+    "kind": "education",
+    "region": "europe",
+    "priority": 2
+  },
+  {
+    "name": "Petzl — Technical Advice",
+    "url": "https://www.petzl.com/",
+    "kind": "education",
+    "region": "europe",
+    "priority": 2
+  },
+  {
+    "name": "UIAA — обучение",
+    "url": "https://www.theuiaa.org/safety/climber-safety-advice/",
+    "kind": "education",
+    "region": "world",
+    "priority": 2
+  },
+  {
+    "name": "UIAA — безопасность",
+    "url": "https://www.theuiaa.org/category/safety/",
+    "kind": "article",
+    "region": "world",
+    "priority": 2
+  }
 ]
