@@ -7,7 +7,7 @@ Geographic mix over time: 60% Tatras/nearby Poland, 25% accessible Europe, 15% w
 Choose nature, surprising educational explanations, interesting events and useful small stories.
 A technical route report full of grades, bolts and equipment is NOT interesting just because it is in the Tatras.
 Every story needs a concrete reason a beginner would care. Keep local names searchable.
-One specific hook, 2-3 short paragraphs, usually 60-90 words, at most one emoji.
+One specific hook, 2-3 short paragraphs, usually 60-90 words, 2-3 purposeful emojis when helpful, at paragraph starts or for a short practical list; never decorate every sentence.
 No pompous abstractions, generic inspiration, 'живая история', fake urgency, automatic sales endings,
 forced engagement questions, or repetitive templates. Sound like an informed person sharing a discovery.
 Do not pretend to have visited a place. Never manufacture a sensation.

@@ -158,3 +158,13 @@ publish, pause/resume and change shared editorial context. The inbox, drafts, ph
 daily limits and $18 AI allowance are shared. Upload/edit conversations are isolated per user;
 approvals record the acting moderator. Scheduled notices still go only to the primary owner.
 Remove an ID and redeploy to revoke future access. Existing scheduled approvals remain scheduled.
+
+## Generated illustration fallback
+When Commons and the optional photo collection provide no usable image, the bot calls OpenAI
+`gpt-image-2.5-flare` (1024×1024, medium). Uses the existing OPENAI_API_KEY; model access may require
+account verification. Set AI_IMAGE_FALLBACK=false to disable. Generated images are explicitly labelled
+as AI illustrations, never photographs or evidence of real conditions, and require normal approval.
+Each attempt consumes a conservative $0.25 allowance from the shared $18 monthly guard, including failed
+or ambiguous calls. This is a budget allocation, not the actual image price. Images are cached in SQLite
+so reopening or retrying delivery does not generate/pay again. One generation attempt per draft; no
+automatic paid retries. Existing posts are not rewritten; new drafts/rewrites may use 2–3 useful emojis.

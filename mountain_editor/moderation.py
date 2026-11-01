@@ -16,6 +16,24 @@ MENU = {
 
 
 class Moderation:
+    def generated_photo(self, id):
+        if not os.getenv('OPENAI_API_KEY') or os.getenv('AI_IMAGE_FALLBACK','true').lower() != 'true' or self.editor.provider.name == 'demo':
+            return False
+        from . import generated
+        row=self.store.get(id)
+        try:
+            self.tell('Создаю ИИ-иллюстрацию… Это может занять до двух минут.')
+            image=generated.generate(self.store,id)
+            file_id=generated.upload(self.token,self.owner,image,row['text']+'\n\n'+generated.CREDIT)
+            self.store.edit(id,photo=file_id,credit=generated.CREDIT,text_only=0)
+            return True
+        except Exception as error:
+            from .providers import redact_error
+            detail=redact_error(str(error))
+            print('Image fallback failed: '+detail,flush=True)
+            self.tell('ИИ-иллюстрация недоступна: '+detail+' Текст сохранён; можно выбрать «Без фото».')
+            return False
+
     def web_photo(self, id):
         if os.getenv('AUTO_PHOTOS','true').lower() != 'true':
             return False

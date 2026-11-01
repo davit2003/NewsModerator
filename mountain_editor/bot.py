@@ -53,6 +53,8 @@ class Bot(Moderation):
             photo_sent = self.web_photo(id)
             if not photo_sent:
                 self.choose_photo(id)
+            if not photo_sent and not self.store.get(id)['photo']:
+                photo_sent = self.generated_photo(id)
             row = self.store.get(id)
         caption = row['text']+ ('\n\n'+row['credit'] if row['credit'] else '')
         if row['photo'] and not photo_sent:
@@ -64,7 +66,7 @@ class Bot(Moderation):
                 if row['state'] not in ('draft','approved'): raise
                 self.store.edit(id,photo=None,credit=None)
                 self.store.set(f'commons_seen:{id}','[]')
-                if self.web_photo(id):
+                if self.web_photo(id) or self.generated_photo(id):
                     return self.preview(id,photo_sent=True)
                 row=self.store.get(id)
                 self.tell(row['text'])
