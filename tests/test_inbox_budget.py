@@ -20,6 +20,23 @@ class InboxTests(unittest.TestCase):
             source_url='https://tpn.gov.pl/story?utm_source=openai', evidence='Source-supported facts. '*12,
             category='nature',region='tatras',freshness='evergreen',score=9,verified=True,event_key='mountain leaf colours')
 
+    def test_alert_accepts_cited_official_replacement(self):
+        self.box.add({**self.item,'freshness':'alert','category':'alert'},[self.item['source_url']])
+        self.p.call.side_effect=[(json.dumps({'verified':True,'source_url':'https://topr.pl/current','evidence':'Dated current official facts.'}),['https://topr.pl/current']),
+                                (json.dumps({'publishable':True,'text':'Проверенная информация.'}),[])]
+        id=self.box.draft(1)
+        self.assertIn('https://topr.pl/current',self.s.get(id)['text'])
+
+    def test_invalid_old_bot_photo_recovers(self):
+        id=self.s.add('photo','Text',[],'')
+        self.s.edit(id,photo='old-bot-id',credit='Author')
+        bot=Bot.__new__(Bot); bot.store=self.s; bot.owner=1; bot.live=False
+        bot.api=Mock(side_effect=[ValueError('wrong file identifier/HTTP URL specified'),{'message_id':1},{'message_id':2},{'message_id':3}])
+        bot.web_photo=Mock(return_value=False)
+        bot.preview(id)
+        self.assertIsNone(self.s.get(id)['photo'])
+        bot.web_photo.assert_called_once_with(id)
+
     def test_news_seven_day_cutoff(self):
         from datetime import datetime, timezone
         old=datetime.fromtimestamp(time.time()-8*86400,timezone.utc).isoformat()

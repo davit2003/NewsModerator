@@ -56,7 +56,19 @@ class Bot(Moderation):
             row = self.store.get(id)
         caption = row['text']+ ('\n\n'+row['credit'] if row['credit'] else '')
         if row['photo'] and not photo_sent:
-            self.api('sendPhoto',chat_id=self.owner,photo=row['photo'],caption=caption)
+            try:
+                self.api('sendPhoto',chat_id=self.owner,photo=row['photo'],caption=caption)
+            except ValueError as error:
+                if 'wrong file identifier' not in str(error): raise
+                # Telegram file IDs belong to the issuing bot, not the shared database.
+                if row['state'] not in ('draft','approved'): raise
+                self.store.edit(id,photo=None,credit=None)
+                self.store.set(f'commons_seen:{id}','[]')
+                if self.web_photo(id):
+                    return self.preview(id,photo_sent=True)
+                row=self.store.get(id)
+                self.tell(row['text'])
+                self.tell('Сохранённое фото недоступно этому боту. Выберите другое фото или «Без фото».')
         elif not row['photo']:
             self.tell(caption)
         version = row['version']

@@ -26,9 +26,11 @@ class Moderation:
         seen = json.loads(self.store.setting(f'commons_seen:{id}','[]'))
         try:
             photos = commons.search(query,1024-commons.units(row['text'])-2,seen)
-        except Exception:
+        except Exception as error:
+            print('Commons lookup failed: '+type(error).__name__,flush=True)
             self.tell('Поиск фото временно недоступен. Текст сохранён; попробуйте «Найти другое фото» позже.')
             return False
+        print(f'Commons eligible photos: {len(photos)}; caption space: {1024-commons.units(row["text"])-2}',flush=True)
         for photo in photos[:3]:
             try:
                 # Freeze the actual image as a Telegram file_id before approval; publication never
@@ -36,7 +38,9 @@ class Moderation:
                 preview = self.api('sendPhoto',chat_id=self.owner,photo=photo['image_url'],
                                  caption=row['text']+'\n\n'+photo['credit'])
                 file_id = preview['photo'][-1]['file_id']
-            except Exception:
+            except Exception as error:
+                from .providers import redact_error
+                print('Photo delivery failed: '+redact_error(str(error)),flush=True)
                 continue
             self.store.edit(id,photo=file_id,credit=photo['credit'],text_only=0)
             seen.append(photo['page_id'])
