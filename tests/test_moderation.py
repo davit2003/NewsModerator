@@ -35,6 +35,20 @@ class ModerationTests(unittest.TestCase):
             self.message('🖼 Мои фотографии')
         self.callback('rights:'+self.bot.dialog()['token'])
 
+    def test_multiple_moderators_have_isolated_dialogs(self):
+        self.bot.allowed_users = {1,2}
+        self.message('🖼 Мои фотографии',user=1,chat=1)
+        first=self.store.setting('dialog:1')
+        self.message('🖼 Мои фотографии',user=2,chat=2)
+        self.assertEqual(self.store.setting('dialog:1'),first)
+        self.assertEqual(json.loads(self.store.setting('dialog:2'))['owner'],2)
+        self.assertEqual(self.bot.owner,1)
+        self.assertEqual(self.bot.api.call_args.kwargs['chat_id'],2)
+        before=self.bot.api.call_count
+        self.message('/find',user=3,chat=3)
+        self.message('/find',user=2,chat=-10)
+        self.assertEqual(self.bot.api.call_count,before)
+
     def test_upload_without_commands(self):
         self.upload_setup()
         self.message('Татры осенью',photo=True)
@@ -118,7 +132,7 @@ class ModerationTests(unittest.TestCase):
         self.upload_setup()
         state = self.bot.dialog()
         state['expires'] = 0
-        self.store.set('dialog',json.dumps(state))
+        self.store.set('dialog:1',json.dumps(state))
         self.message(photo=True)
         self.assertEqual(self.store.photos(),[])
 

@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import time
@@ -29,6 +30,9 @@ class Bot(Moderation):
         self.store, self.editor = store, editor
         self.token = os.environ['TELEGRAM_BOT_TOKEN']
         self.owner = int(os.environ['OWNER_TELEGRAM_ID'])
+        self.allowed_users = {self.owner} | {int(x.strip()) for x in os.getenv('ALLOWED_TELEGRAM_IDS','').split(',') if x.strip()}
+        if any(x <= 0 for x in self.allowed_users):
+            raise ValueError('Moderator IDs must be positive Telegram user IDs')
         self.target = os.environ['TARGET_CHAT_ID']
         self.live = os.getenv('PUBLISH_ENABLED','false').lower() == 'true'
         if self.live and editor.provider.name == 'demo':
@@ -96,6 +100,24 @@ class Bot(Moderation):
         self.show_inbox()
 
     def process(self, update):
+        callback = update.get('callback_query')
+        event = callback or update.get('message',{})
+        actor = event.get('from',{}).get('id')
+        chat = (event.get('message',{}) if callback else event).get('chat',{}).get('id')
+        if actor not in getattr(self,'allowed_users',{self.owner}) or chat != actor:
+            return
+        # Request-local identity; background notifications still go to the primary owner.
+        session = copy.copy(self)
+        session.owner = actor
+        try:
+            session._process_authorized(update)
+        except ValueError as error:
+            print('Command failed: '+str(error),flush=True)
+            session.tell(str(error))
+            error.moderator_notified = True
+            raise
+
+    def _process_authorized(self, update):
         callback = update.get('callback_query')
         message = update.get('message',{})
         if callback:
@@ -261,7 +283,8 @@ class Bot(Moderation):
                         self.process(update)
                     except ValueError as error:
                         print('Command failed: '+str(error),flush=True)
-                        self.tell(str(error))
+                        if not getattr(error,'moderator_notified',False):
+                            self.tell(str(error))
                     except Exception as error:
                         print('Command failed: '+type(error).__name__,flush=True)
                         self.tell('Ошибка внешнего сервиса. Проверьте /queue перед повтором команды.')

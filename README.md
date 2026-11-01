@@ -102,7 +102,7 @@ clearance; review image relevance, visible people/logos and attribution. Search 
 Use **Изменить фото → Найти другое фото** or optional **Мои фотографии** uploads with rights confirmation.
 If no suitable image is found, the draft is preserved and **Без фото** remains available.
 
-Only the configured owner in their private chat can operate controls. Stale approval buttons fail.
+Only the configured owner and explicitly allowed moderators in their own private chats can operate controls. Stale approval buttons fail.
 Editing text or images revokes approval. Claims are atomic, and uncertain Telegram sends are held
 for manual review without automatic reposting. Demo mode cannot publish.
 
@@ -149,3 +149,12 @@ runs at most once per UTC day under the same AI budget. Verified learning articl
 cutoff. API/source failures or exhausted budget may still prevent suggestions; the bot reports these
 instead of inventing content. Legacy undated inbox ideas are expired and recollected on upgrade;
 already prepared drafts remain unchanged.
+
+## Additional moderators
+Set ALLOWED_TELEGRAM_IDS to comma-separated numeric Telegram user IDs, for example
+`123456789,987654321`. OWNER_TELEGRAM_ID remains the primary owner and is always allowed.
+Each moderator must start the bot privately. All allowed moderators can research, edit, approve,
+publish, pause/resume and change shared editorial context. The inbox, drafts, photo collection,
+daily limits and $18 AI allowance are shared. Upload/edit conversations are isolated per user;
+approvals record the acting moderator. Scheduled notices still go only to the primary owner.
+Remove an ID and redeploy to revoke future access. Existing scheduled approvals remain scheduled.

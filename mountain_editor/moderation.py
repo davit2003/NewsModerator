@@ -50,19 +50,19 @@ class Moderation:
         self.api('sendMessage',chat_id=self.owner,text=text,reply_markup=MENU)
 
     def dialog(self):
-        state = json.loads(self.store.setting('dialog','{}'))
+        state = json.loads(self.store.setting(f'dialog:{self.owner}','{}'))
         if state and (state.get('owner') != self.owner or state.get('expires',0) < time.time()):
-            self.store.set('dialog','{}')
+            self.store.set(f'dialog:{self.owner}','{}')
             return {}
         return state
 
     def set_dialog(self, mode, **values):
         state = dict(mode=mode,owner=self.owner,expires=time.time()+3600,token=uuid.uuid4().hex[:12],**values)
-        self.store.set('dialog',json.dumps(state,ensure_ascii=False))
+        self.store.set(f'dialog:{self.owner}',json.dumps(state,ensure_ascii=False))
         return state
 
     def clear_dialog(self):
-        self.store.set('dialog','{}')
+        self.store.set(f'dialog:{self.owner}','{}')
 
     def valid_draft(self, id, version):
         row = self.store.get(id)
@@ -111,7 +111,7 @@ class Moderation:
                 if state['mode'] != 'rights':
                     raise ValueError('Загрузка уже началась.')
                 state['mode'] = 'upload'
-                self.store.set('dialog',json.dumps(state))
+                self.store.set(f'dialog:{self.owner}',json.dumps(state))
                 self.api('sendMessage',chat_id=self.owner,
                     text='Отправьте фото обычным сообщением — без команд. Можно отправить альбом. '
                          'Необязательная подпись поможет подбору: место, сезон, что на фото. '
@@ -207,7 +207,7 @@ class Moderation:
                 self.store.edit(state['draft'],photo=photo['file_id'],credit=credit,text_only=0)
                 state['attached'] = True
                 state['version'] = self.store.get(state['draft'])['version']
-                self.store.set('dialog',json.dumps(state))
+                self.store.set(f'dialog:{self.owner}',json.dumps(state))
             self.api('sendMessage',chat_id=self.owner,text='Фото добавлено. Можно прислать ещё или закончить загрузку.',
                      reply_markup={'inline_keyboard':[[{'text':'Готово','callback_data':'done:'+state['token']}]]})
             return True
