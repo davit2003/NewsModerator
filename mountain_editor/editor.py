@@ -37,7 +37,7 @@ class Editor:
         if self.provider.name == 'demo':
             raise ValueError('Переписывание доступно после подключения AI')
         prompt = self.brief+'\nRewrite the Russian text using the owner feedback. Preserve all facts and the source URL exactly. Return plain text, max 850 UTF-16 units.\nTEXT:\n'+row['text']+'\nFEEDBACK:\n'+instruction
-        text, _ = self.provider.call(prompt)
+        text, _ = self.provider.call(prompt,writing=True)
         for source in json.loads(row['sources']):
             if source in row['text'] and source not in text:
                 raise ValueError('Переписанный текст потерял ссылку на источник')

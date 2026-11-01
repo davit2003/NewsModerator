@@ -121,6 +121,19 @@ class BudgetTests(unittest.TestCase):
         with patch.object(Budget,'month',return_value='2099-01'): self.assertEqual(b.used(),0)
         with self.assertRaises(ValueError): b.reserve('unknown','abc',1000,False)
 
+    def test_terra_writing_routing_and_price(self):
+        with patch.dict(os.environ,{'AI_PROVIDER':'openai','AI_MODEL':'gpt-6.1-terra','OPENAI_API_KEY':'test'},clear=True):
+            s=Store(':memory:'); p=Provider(s)
+            response={'status':'completed','usage':{'input_tokens':1000,'output_tokens':1000},'output':[]}
+            with patch('mountain_editor.providers.post',return_value=response) as post:
+                p.call('Write',writing=True)
+                self.assertEqual(post.call_args.args[1]['model'],'gpt-6.1-terra')
+                self.assertEqual(post.call_args.args[1]['reasoning'],{'effort':'none'})
+                self.assertAlmostEqual(Budget(s).used(),.0072,places=5)
+                p.call('Research')
+                self.assertEqual(post.call_args.args[1]['model'],'gpt-5.4-mini')
+                self.assertGreater(Budget(s).used(),.0072)
+
     def test_provider_bounds_tools_and_records_usage(self):
         with patch.dict(os.environ,{'AI_PROVIDER':'openai','AI_MODEL':'gpt-5.4-mini','OPENAI_API_KEY':'test'}):
             s=Store(':memory:'); p=Provider(s)

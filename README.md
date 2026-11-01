@@ -60,9 +60,12 @@ The code caps AI_MONTHLY_BUDGET_USD at 18; lowering it is supported. Budget acco
 months, stored in SQLite, and survives restarts. It starts at deployment; it cannot recover prior spend
 or track another app sharing the API key.
 
-Only OpenAI `gpt-5.4-mini` (or `gpt-5.4-mini-2026-03-17`) is enabled for the priced budget path. Unknown
-models and Gemini fail closed until their pricing/accounting is implemented. Published baseline rates
-checked 2026-10-31: $0.75/M input, $4.50/M output, $0.01/search call.
+OpenAI research uses `AI_RESEARCH_MODEL=gpt-5.4-mini` by default. Drafting and rewrites use
+`AI_WRITING_MODEL`, falling back to `AI_MODEL`. Set `AI_MODEL=gpt-6.1-terra` to use Terra for
+writing and mini for research automatically. Terra writing disables reasoning; search remains on mini.
+The ledger records each request's model and shares the same $18 cap across both models.
+Baseline standard prices per million tokens: mini $0.75 input/$4.50 output; Terra $1 input/$5 output.
+Unknown models and Terra search fail closed; no guard removal is needed.
 
 Before each request the app reserves a conservative amount for input/output and up to two search calls.
 Successful responses reconcile token usage with full-price input (no cached-input discount), an extra

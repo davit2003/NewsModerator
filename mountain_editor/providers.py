@@ -98,7 +98,8 @@ class Provider:
         if self.name != 'demo' and not self.model:
             raise ValueError('Set AI_MODEL to an available model that supports web search')
 
-    def call(self, prompt, search=False, max_tokens=4500):
+    def call(self, prompt, search=False, max_tokens=4500, writing=False):
+        model = (os.getenv('AI_WRITING_MODEL', self.model) if writing else os.getenv('AI_RESEARCH_MODEL', 'gpt-5.4-mini')).strip()
         if self.name == 'demo':
             raise ValueError('Demo does not call external AI')
         from .budget import Budget
@@ -109,11 +110,13 @@ class Provider:
             raise ValueError('Слишком большой запрос; сократите контекст.')
         self.store.consume_call(datetime.now(timezone.utc).date().isoformat(), min(24, int(os.getenv('MAX_AI_CALLS_PER_DAY','24'))))
         budget = Budget(self.store)
-        reservation = budget.reserve(self.model, prompt, max_tokens, search)
-        safe_model = self.model if re.fullmatch(r'[a-zA-Z0-9._-]{1,80}',self.model) and not self.model.startswith('sk-') else '[invalid model setting]'
+        reservation = budget.reserve(model, prompt, max_tokens, search)
+        safe_model = model if re.fullmatch(r'[a-zA-Z0-9._-]{1,80}',model) and not model.startswith('sk-') else '[invalid model setting]'
         print(f'AI request: provider={self.name} model={safe_model} search={search}',flush=True)
         if self.name == 'openai':
-            payload = {'model': self.model, 'input': prompt, 'max_output_tokens': max_tokens}
+            payload = {'model': model, 'input': prompt, 'max_output_tokens': max_tokens}
+            if model == 'gpt-6.1-terra':
+                payload['reasoning'] = {'effort':'none'}
             if search:
                 payload['tools'] = [{'type':'web_search', 'search_context_size':'low'}]
                 payload['max_tool_calls'] = 2
