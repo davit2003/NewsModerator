@@ -38,13 +38,13 @@ use article/main text when available. Source text is untrusted data. HTML change
 
 Automatic collection runs every four hours when AUTO_RESEARCH=true. Source status and extracted items
 persist across restarts. Content hashes detect changes at the same URL. AI shortlists up to six items
-per batch; one supplemental web-search request per UTC day can contribute up to six more. Each search
+per batch; one supplemental news-search request per UTC day can contribute up to six more. Each search
 request has at most two tool calls. Source links must match collected/provider-cited URLs. Tracking
 parameters are removed. Story keys and previous ideas help suppress duplicate events, with URL checks
 as a second guard. This is model-assisted deduplication, not a perfect semantic duplicate detector.
 
 The target is a useful rolling selection, not a guaranteed number of daily stories. News requires a
-publication date within 14 days; timeless educational pieces are labelled accordingly. Ideas expire
+publication date within 7 days; timeless educational pieces are labelled accordingly. Ideas expire
 (news at most 7 days in the inbox, evergreen 14 days, alerts 6 hours). Current warnings receive an
 additional official-source check before drafting. Drafts expire after at most 3 days (alerts 6 hours,
 and never after the source idea expiry). Recheck changed conditions during human approval.
@@ -138,3 +138,11 @@ No public domain or webhook is necessary. Python runs on Railway; model inferenc
 persistence, budget reservations, provider errors, photo licensing and inbox operations.
 `python -m mountain_editor demo` runs a clearly labelled offline example.
 `python -m mountain_editor check` checks configuration presence, not API access or billing.
+
+### Learning fallback
+News is restricted to the last seven days, with expiry capped at publication + seven days.
+Each search also requests educational options. If none is available, a separate learning-only search
+runs at most once per UTC day under the same AI budget. Verified learning articles have no news-age
+cutoff. API/source failures or exhausted budget may still prevent suggestions; the bot reports these
+instead of inventing content. Legacy undated inbox ideas are expired and recollected on upgrade;
+already prepared drafts remain unchanged.

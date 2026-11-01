@@ -111,7 +111,7 @@ def collect_source(source):
             try: link = canonical(link)
             except ValueError: continue
             stamp = date_of(val('pubDate') or val('published') or val('updated'))
-            if not stamp or stamp < now-14*86400 or stamp > now+86400: continue
+            if not stamp or stamp < now-7*86400 or stamp > now+86400: continue
             text = plain(val('encoded') or val('content') or val('description') or val('summary'))
             if len(text) < 100: continue
             result.append(dict(url=link,title=val('title')[:240],body=text[:6000],published=stamp,kind='news'))

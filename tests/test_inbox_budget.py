@@ -20,6 +20,21 @@ class InboxTests(unittest.TestCase):
             source_url='https://tpn.gov.pl/story?utm_source=openai', evidence='Source-supported facts. '*12,
             category='nature',region='tatras',freshness='evergreen',score=9,verified=True,event_key='mountain leaf colours')
 
+    def test_news_seven_day_cutoff(self):
+        from datetime import datetime, timezone
+        old=datetime.fromtimestamp(time.time()-8*86400,timezone.utc).isoformat()
+        self.assertFalse(self.box.add({**self.item,'freshness':'news','published_at':old},[self.item['source_url']]))
+        recent=datetime.fromtimestamp(time.time()-6*86400,timezone.utc).isoformat()
+        self.assertTrue(self.box.add({**self.item,'freshness':'news','published_at':recent},[self.item['source_url']]))
+        self.assertLessEqual(self.box.rows()[0]['expires'],time.time()+86400)
+
+    def test_empty_news_triggers_learning_search(self):
+        self.p.call.side_effect=[(json.dumps({'items':[]}),[]),(json.dumps({'items':[self.item]}),[self.item['source_url']])]
+        with patch('mountain_editor.inbox.collect',return_value=([],[])):
+            self.box.refresh()
+        self.assertEqual(self.p.call.call_count,2)
+        self.assertEqual(self.box.rows()[0]['freshness'],'evergreen')
+
     def test_tracking_links_deduplicate(self):
         self.assertTrue(self.box.add(self.item,['https://tpn.gov.pl/story']))
         self.assertFalse(self.box.add({**self.item,'source_url':'https://tpn.gov.pl/story'},['https://tpn.gov.pl/story']))
