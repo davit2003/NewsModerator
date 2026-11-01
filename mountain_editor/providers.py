@@ -33,7 +33,9 @@ class APIError(ValueError):
                    'unsupported_parameter','unsupported_value','context_length_exceeded',
                    'RESOURCE_EXHAUSTED','UNAUTHENTICATED','PERMISSION_DENIED','INVALID_ARGUMENT'}
         self.code = code if isinstance(code,str) and code in allowed else 'unknown'
-        if self.code in ('insufficient_quota','billing_hard_limit_reached'):
+        if service == 'Telegram':
+            hint = 'Telegram отклонил запрос. Проверьте описание ошибки, chat ID и доступ бота.'
+        elif self.code in ('insufficient_quota','billing_hard_limit_reached'):
             hint = 'Недостаточно API-кредитов или достигнут лимит оплаты. Проверьте Billing в OpenAI API; подписка ChatGPT не оплачивает API.'
         elif status == 401:
             hint = 'Ключ API не принят. Проверьте ключ и проект в настройках сервиса.'
@@ -73,7 +75,7 @@ def post(url, payload, headers=None, timeout=100):
             elif isinstance(details,str):
                 detail = details
             if not detail:
-                detail = body.get('message','')
+                detail = body.get('description') or body.get('message','')
         except (ValueError,AttributeError):
             pass
         limits = []

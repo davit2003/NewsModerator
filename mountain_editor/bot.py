@@ -271,7 +271,14 @@ class Bot(Moderation):
             except Exception as error:
                 self.store.set('ai_diagnostic_v2',type(error).__name__)
                 print('AI diagnostic: '+type(error).__name__,flush=True)
-        self.menu('Редактор запущен. '+('Публикация включена.' if self.live else 'Публикация отключена.'))
+        try:
+            identity = self.api('getMe')
+            print('Telegram identity: @'+str(identity.get('username','unknown')),flush=True)
+            self.menu('Редактор запущен. '+('Публикация включена.' if self.live else 'Публикация отключена.'))
+        except ValueError as error:
+            print('Startup notification failed: '+str(error),flush=True)
+            # A missing private chat must not prevent receiving /start.
+
         while True:
             try:
                 updates = self.api('getUpdates',offset=int(self.store.setting('offset','0')),timeout=20,
